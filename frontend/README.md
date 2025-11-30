@@ -3,7 +3,6 @@
 Implements the UI/UX for the static code analyzer.
 
 ## Requirements
-- Modern SPA-like experience with shared navigation bar on all main pages.
 - Pages: `/registration`, `/authorization`, `/home`, `/projects`, `/projects/{id}` (with file tree), `/projects/{id}/{file}` (editor + analysis, same view as `/projects/{id}`), `/sandbox`.
 - Automatic analysis trigger on file changes with debouncing; user can pick analyzer/tool when multiple are available.
 - Shared UI components: code review block (line comments), project list CRUD, file tree, auth forms, navigation bar.
