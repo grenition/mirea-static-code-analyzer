@@ -8,186 +8,178 @@
 
 Supported languages:
 
-- Python
-- Java
-- JavaScript
-- C#
-- C++
-- Json
+* Python
+* Java
+* JavaScript
+* C#
+* C++
+* JSON
 
-User can analyze file within project or without them. 
+User can analyze a file within a project or as a standalone file (sandbox).
 
-#### 2. Users identity
+#### 2. User identity
 
-Authorization by login and password.
+* Authorization by login and password.
+* Passwords must be stored as a secure cryptographic hash (e.g. bcrypt).
+* Only the project owner can access and manage project data.
 
 #### 3. Storing user projects
 
-User can create/read/delete/update any count of projects.
+User can create, read, update and delete any number of projects.
 
 Project is:
 
-- Name of project
-- Files with paths (need to save origin project structure)
+* Project name
+* Files with paths (original project structure must be preserved)
 
 Project can be created with:
 
-- Uploading archive file: .zip, max size: 25 mb
-- Manually file by file
+* Uploading an archive file: `.zip`, max size: **25 MB**
+* Creating files manually (file by file, with arbitrary nested paths)
 
-Only project owner can access project data
+When a project is deleted, all its files and related analysis results must be deleted as well.
 
-#### 3. UI/UX
+#### 4. UI/UX
 
-Web site with modern design.
+Web site with a modern design.
 
 Pages:
 
-- /registration
-- /authorization
-- /home - tutorial page with navigation to projects page or to single file page
-- /projects - list of projects with availabillity to create/delete/edit projects (preferred the same component that in home page)
-- /projects/{id} - list of project files
-- /projects/{id}/{file} - file edit and analysis with breadcrumbs (note that /projects/{id} and /projects/{id}/{file} should be a single page that renders on client side to provide fluent user experience)
-- /sandbox - single file edit and analysis
+* `/registration` – user registration
+* `/authorization` – user login
+* `/home` – tutorial/landing page with navigation to projects page and sandbox
+* `/projects` – list of projects with ability to create / edit / delete projects (preferably using the same UI component as on `/home`)
+* `/projects/{id}` – project view with file tree
+* `/projects/{id}/{file}` – file edit and analysis with breadcrumbs
 
-Page navigation bar is required
+  * `/projects/{id}` and `/projects/{id}/{file}` must be implemented as a single client-side page (SPA-like) for fluent user experience
+* `/sandbox` – single file edit and analysis (without project)
 
-Analysis should be started automatically after file appearance or changing.
+Additional UI requirements:
 
-User can select analyzer manually.
+* Global navigation bar is required on all main pages.
+* Analysis should be triggered automatically after a file appears or changes (with reasonable debouncing on the client).
+* User can select the analyzer (language / tool) manually when multiple choices are available.
 
 ### Non functional requirements
 
-- Low latency of analysis, less than 3 seconds
-- Low latency on crud operations
-- Error messages must be user-friendly and not expose internal details
-- System must follow MVC architecture
+* Low latency of analysis: less than **3 seconds** for typical files.
+* Low latency on CRUD operations with projects and files.
+* Error messages must be user-friendly and must not expose internal details (no stack traces, internal paths, etc.).
+* System must follow MVC architecture inside backend services (clear separation of controllers, business logic and data access).
+* Web UI must use modern styles (e.g. Tailwind CSS) and render correctly in modern browsers (Chrome, Firefox, Edge).
+
+---
 
 ## Architecture
 
 ### Backend
 
-#### API Gateway (nginx)
+#### API Gateway (Nginx)
 
-#### Analysers microservices group:
+See [deployments/README.md](./deployments/README.md) for gateway and docker-compose architecture.
 
-5 stateless microservices that only analyze code for specified language:
+#### Analyzer microservices group
 
-##### python_analyzer_service 
-use library: flake8
-api: api/analyzer/python
-language: golang
-achitecture: mvc
+Stateless microservices that only analyze code for a specified language.
 
-##### java_analyzer_service 
-use library: Checkstyle
-api: api/analyzer/java
-language: golang
-achitecture: mvc
+Each analyzer:
 
-##### javascript_analyzer_service 
-use library: ESLint
-api: api/analyzer/javascript
-language: golang
-achitecture: mvc
+* Is stateless.
+* Implements MVC internally (controllers → services → models).
+* Exposes a single HTTP API endpoint.
+* Receives file contents in the request body and returns analysis results in a unified JSON format.
 
-##### csharp_analyzer_service 
-use dotnet sdk
-api: api/analyzer/csharp
-language: golang
-achitecture: mvc
+##### python_analyzer_service
 
-##### cpp_analyzer_service 
-use library: cppcheck
-api: api/analyzer/cpp
-language: golang
-achitecture: mvc
+See [services/analyzers/python_analyzer_service/README.md](./services/analyzers/python_analyzer_service/README.md).
 
-##### json_analyzer_service 
-use library: github.com/xeipuuv/gojsonschema
-api: api/analyzer/json
-language: golang
-achitecture: mvc
+##### java_analyzer_service
 
-common api contract:
+See [services/analyzers/java_analyzer_service/README.md](./services/analyzers/java_analyzer_service/README.md).
 
-GET:
+##### javascript_analyzer_service
+
+See [services/analyzers/javascript_analyzer_service/README.md](./services/analyzers/javascript_analyzer_service/README.md).
+
+##### csharp_analyzer_service
+
+See [services/analyzers/csharp_analyzer_service/README.md](./services/analyzers/csharp_analyzer_service/README.md).
+
+##### cpp_analyzer_service
+
+See [services/analyzers/cpp_analyzer_service/README.md](./services/analyzers/cpp_analyzer_service/README.md).
+
+##### json_analyzer_service
+
+See [services/analyzers/json_analyzer_service/README.md](./services/analyzers/json_analyzer_service/README.md).
+
+**Common analyzer API contract**
+
+Request (POST):
+
 ```json
 {
-    "files" : [
-        {
-            "path" : "path/to/file",
-            "content" : "content"
-        },
-        {
-            "path" : "path/to/file/2",
-            "content" : "content"
-        }
-    ]
+  "files": [
+    {
+      "path": "path/to/file",
+      "content": "content"
+    },
+    {
+      "path": "path/to/file/2",
+      "content": "content"
+    }
+  ]
 }
 ```
-returns
+
+Response:
+
 ```json
 {
-    "files" : [
+  "files": [
+    {
+      "path": "path/to/file",
+      "comment": "verdict",
+      "line_comments": [
         {
-            "path" : "path/to/file",
-            "comment" : "verdict",
-            "line_comments" : [
-                { "0" : "bad syntax" },
-                { "13" : "no all paths return value" }
-            ]
+          "line": 0,
+          "comment": "bad syntax"
         },
         {
-            "path" : "path/to/file/2",
-            "comment" : "OK"
+          "line": 13,
+          "comment": "not all code paths return a value"
         }
-    ]
+      ]
+    },
+    {
+      "path": "path/to/file/2",
+      "comment": "OK",
+      "line_comments": []
+    }
+  ]
 }
 ```
+
+* `comment` – overall summary/verdict for the file.
+* `line_comments` – optional list of per-line issues.
 
 #### user_identity_service
 
-Stateful service for authenticating users
-
-Database: PostgreSQL
-
-Contracts:
-
-- POST: api/users/register
-- POST: api/users/login
-
-language: golang
-achitecture: mvc
+See [services/user_identity_service/README.md](./services/user_identity_service/README.md).
 
 #### projects_service
 
-Stateful service for storing user projects
+See [services/projects_service/README.md](./services/projects_service/README.md).
 
-Database: PostgreSQL
+#### Communication between services
 
-Contracts:
+* Synchronous HTTP communication over internal network.
+* Data format: JSON.
+* API gateway routes external requests to appropriate internal services.
+* Services authenticate requests using shared tokens / session data from `user_identity_service`.
 
-- api/projects/..
-
-language: golang
-achitecture: mvc
-
-#### Communication between services:
-
-- Synchronous, HTTP
+---
 
 ### Frontend
-
-Pages should use shared components:
-
-- code review block (block with code and line comments if provided by analyzers)
-- project list (with control elements)
-- file structure (in projects) 
-- auth form
-- register form
-etc..
-
-Should be used modern styles like Tailwind CSS.
-
+See [frontend/README.md](./frontend/README.md).
