@@ -1,0 +1,289 @@
+{{define "title"}}Live Code Analyzer - Static Code Analyzer{{end}}
+
+{{define "content"}}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">Live Code Analyzer</h1>
+        <p class="lead">Paste or edit your code and see analysis results in real-time</p>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Code Editor Section -->
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">📝 Code Editor</h5>
+                <button id="analyzeBtn" class="btn btn-light btn-sm">
+                    <span id="analyzeBtnText">Analyze</span>
+                    <span id="analyzeSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="extension" class="form-label">Language / Extension</label>
+                    <select class="form-select" id="extension">
+                        <option value=".txt" selected>.txt</option>
+                        <option value=".go">.go</option>
+                        <option value=".cs">.cs</option>
+                        <option value=".js">.js</option>
+                        <option value=".ts">.ts</option>
+                        <option value=".py">.py</option>
+                        <option value=".java">.java</option>
+                        <option value=".cpp">.cpp</option>
+                        <option value=".php">.php</option>
+                        <option value=".kt">.kt</option>
+                        <option value=".sql">.sql</option>
+                        <option value=".html">.html</option>
+                        <option value=".css">.css</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label for="code_editor" class="form-label">Code (max 50,000 characters)</label>
+                    <textarea class="form-control font-monospace" id="code_editor" rows="20" 
+                              style="font-size: 0.9em; font-family: 'Courier New', monospace;" 
+                              placeholder="Paste your code here or start typing..."></textarea>
+                    <small class="form-text text-muted">
+                        <span id="char-counter">0 / 50,000 characters</span>
+                    </small>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="autoAnalyze" checked>
+                    <label class="form-check-label" for="autoAnalyze">
+                        Auto-analyze on code change (with 1s delay)
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Section -->
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">📊 Analysis Results</h5>
+            </div>
+            <div class="card-body">
+                <div id="resultsPlaceholder" class="text-center text-muted py-5">
+                    <p>No analysis yet. Start typing your code to see results automatically.</p>
+                </div>
+                
+                <div id="resultsContent" class="d-none">
+                    <!-- Summary Cards -->
+                    <div class="row mb-3" id="summaryCards">
+                        <div class="col-4">
+                            <div class="card border-danger text-center">
+                                <div class="card-body p-2">
+                                    <h6 class="card-title text-danger mb-0">Errors</h6>
+                                    <h4 class="mb-0" id="errorCount">0</h4>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="card border-warning text-center">
+                                <div class="card-body p-2">
+                                    <h6 class="card-title text-warning mb-0">Warnings</h6>
+                                    <h4 class="mb-0" id="warnCount">0</h4>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="card border-info text-center">
+                                <div class="card-body p-2">
+                                    <h6 class="card-title text-info mb-0">Info</h6>
+                                    <h4 class="mb-0" id="infoCount">0</h4>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Issues Table -->
+                    <div class="mb-3">
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button class="btn btn-outline-primary active" onclick="filterIssues('all')">All</button>
+                            <button class="btn btn-outline-danger" onclick="filterIssues('error')">Errors</button>
+                            <button class="btn btn-outline-warning" onclick="filterIssues('warn')">Warnings</button>
+                            <button class="btn btn-outline-info" onclick="filterIssues('info')">Info</button>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                        <table class="table table-sm table-hover" id="issuesTable">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th>Severity</th>
+                                    <th>Rule</th>
+                                    <th>Line</th>
+                                    <th>Message</th>
+                                </tr>
+                            </thead>
+                            <tbody id="issuesBody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="errorMessage" class="alert alert-danger d-none"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let autoAnalyzeTimeout = null;
+const maxLength = 50000;
+
+// Character counter
+const codeEditor = document.getElementById('code_editor');
+const charCounter = document.getElementById('char-counter');
+
+codeEditor.addEventListener('input', function() {
+    const length = this.value.length;
+    charCounter.textContent = `${length} / ${maxLength} characters`;
+    
+    if (length > maxLength) {
+        charCounter.classList.add('text-danger');
+        charCounter.textContent += ' (exceeds limit!)';
+    } else if (length > maxLength - 1000) {
+        charCounter.classList.remove('text-danger');
+        charCounter.classList.add('text-warning');
+    } else {
+        charCounter.classList.remove('text-danger', 'text-warning');
+    }
+
+    // Auto-analyze if enabled
+    if (document.getElementById('autoAnalyze').checked && length > 0) {
+        clearTimeout(autoAnalyzeTimeout);
+        autoAnalyzeTimeout = setTimeout(() => {
+            analyzeCode();
+        }, 1000); // 1 second delay
+    }
+});
+
+// Analyze button
+document.getElementById('analyzeBtn').addEventListener('click', analyzeCode);
+
+function analyzeCode() {
+    const code = codeEditor.value.trim();
+    const extension = document.getElementById('extension').value;
+
+    if (!code) {
+        showError('Please enter some code to analyze.');
+        return;
+    }
+
+    if (code.length > maxLength) {
+        showError(`Code is too long (${code.length} characters, max ${maxLength}).`);
+        return;
+    }
+
+    // Show loading state
+    const btn = document.getElementById('analyzeBtn');
+    const btnText = document.getElementById('analyzeBtnText');
+    const spinner = document.getElementById('analyzeSpinner');
+    btn.disabled = true;
+    btnText.textContent = 'Analyzing...';
+    spinner.classList.remove('d-none');
+
+    // Hide previous results/errors
+    document.getElementById('resultsPlaceholder').classList.add('d-none');
+    document.getElementById('resultsContent').classList.add('d-none');
+    document.getElementById('errorMessage').classList.add('d-none');
+
+    // Make API request
+    const formData = new FormData();
+    formData.append('code', code);
+    formData.append('extension', extension);
+
+    fetch('/api/analyze/snippet', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            showError(data.error);
+        } else {
+            displayResults(data);
+        }
+    })
+    .catch(error => {
+        showError('Failed to analyze code: ' + error.message);
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btnText.textContent = 'Analyze';
+        spinner.classList.add('d-none');
+    });
+}
+
+function displayResults(data) {
+    // Show summary
+    document.getElementById('errorCount').textContent = data.summary.error_count || 0;
+    document.getElementById('warnCount').textContent = data.summary.warn_count || 0;
+    document.getElementById('infoCount').textContent = data.summary.info_count || 0;
+
+    // Show issues table
+    const issuesBody = document.getElementById('issuesBody');
+    issuesBody.innerHTML = '';
+
+    if (data.issues && data.issues.length > 0) {
+        data.issues.forEach(issue => {
+            const row = document.createElement('tr');
+            row.setAttribute('data-severity', issue.severity);
+            
+            const severityBadge = issue.severity === 'error' ? 
+                '<span class="badge bg-danger">Error</span>' :
+                issue.severity === 'warn' ?
+                '<span class="badge bg-warning">Warning</span>' :
+                '<span class="badge bg-info">Info</span>';
+
+            row.innerHTML = `
+                <td>${severityBadge}</td>
+                <td><code>${issue.rule_code}</code></td>
+                <td>${issue.line || '-'}</td>
+                <td>${escapeHtml(issue.message)}</td>
+            `;
+            issuesBody.appendChild(row);
+        });
+    } else {
+        issuesBody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No issues found! Your code looks clean.</td></tr>';
+    }
+
+    // Show results
+    document.getElementById('resultsPlaceholder').classList.add('d-none');
+    document.getElementById('resultsContent').classList.remove('d-none');
+}
+
+function showError(message) {
+    const errorDiv = document.getElementById('errorMessage');
+    errorDiv.textContent = message;
+    errorDiv.classList.remove('d-none');
+    document.getElementById('resultsPlaceholder').classList.remove('d-none');
+    document.getElementById('resultsContent').classList.add('d-none');
+}
+
+function filterIssues(severity) {
+    const rows = document.querySelectorAll('#issuesTable tbody tr');
+    const buttons = document.querySelectorAll('.btn-group button');
+    
+    buttons.forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+    
+    rows.forEach(row => {
+        if (severity === 'all' || row.getAttribute('data-severity') === severity) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+</script>
+{{end}}
+

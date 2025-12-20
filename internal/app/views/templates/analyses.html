@@ -1,0 +1,59 @@
+{{define "title"}}Analysis History - Static Code Analyzer{{end}}
+
+{{define "content"}}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">Analysis History</h1>
+
+        {{if .Analyses}}
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>Project</th>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Analyses}}
+                    <tr>
+                        <td>{{.Project.Name}}</td>
+                        <td>
+                            {{if eq .Analysis.InputType "zip"}}
+                                <span class="badge bg-primary">ZIP</span>
+                            {{else}}
+                                <span class="badge bg-success">Snippet</span>
+                            {{end}}
+                        </td>
+                        <td>
+                            {{if eq .Analysis.Status "Done"}}
+                                <span class="badge bg-success">Done</span>
+                            {{else if eq .Analysis.Status "Running"}}
+                                <span class="badge bg-warning">Running</span>
+                            {{else if eq .Analysis.Status "Failed"}}
+                                <span class="badge bg-danger">Failed</span>
+                            {{else}}
+                                <span class="badge bg-secondary">{{.Analysis.Status}}</span>
+                            {{end}}
+                        </td>
+                        <td>{{.Analysis.CreatedAt.Format "2006-01-02 15:04:05"}}</td>
+                        <td>
+                            <a href="/analyses/{{.Analysis.ID}}" class="btn btn-sm btn-outline-primary">View Details</a>
+                        </td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+        {{else}}
+        <div class="alert alert-info">
+            <p class="mb-0">No analyses found. <a href="/upload">Upload your first code for analysis</a>.</p>
+        </div>
+        {{end}}
+    </div>
+</div>
+{{end}}
+

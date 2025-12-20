@@ -1,0 +1,49 @@
+{{define "title"}}Home - Static Code Analyzer{{end}}
+
+{{define "content"}}
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="text-center mb-5">
+            <h1 class="display-4">Static Code Analyzer</h1>
+            <p class="lead">A language-agnostic static analysis tool for source code</p>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">About This Service</h5>
+                <p class="card-text">
+                    This web service performs static code analysis on your source code files.
+                    You can either upload a ZIP archive containing multiple files or paste a code snippet directly.
+                    The analyzer checks your code against various rules and generates a detailed report.
+                </p>
+            </div>
+        </div>
+
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">📦 Upload ZIP Archive</h5>
+                        <p class="card-text">Upload a ZIP file containing multiple source code files for analysis.</p>
+                        <a href="/upload" class="btn btn-primary">Upload ZIP</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">📝 Live Code Analyzer</h5>
+                        <p class="card-text">Paste or edit code and see analysis results in real-time with instant feedback.</p>
+                        <a href="/snippet-analyzer" class="btn btn-primary">Open Live Analyzer</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-4 text-center">
+            <a href="/analyses" class="btn btn-outline-secondary">View Analysis History</a>
+        </div>
+    </div>
+</div>
+{{end}}
+

@@ -1,0 +1,70 @@
+{{define "title"}}About - Static Code Analyzer{{end}}
+
+{{define "content"}}
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <h1 class="mb-4">About</h1>
+
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Technology Stack</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled">
+                    <li><strong>Frontend:</strong> HTML5, CSS3, JavaScript, Bootstrap 5</li>
+                    <li><strong>Backend:</strong> Golang</li>
+                    <li><strong>Database:</strong> PostgreSQL</li>
+                    <li><strong>Architecture:</strong> MVC (Model-View-Controller)</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Analysis Rules</h5>
+            </div>
+            <div class="card-body">
+                <p>The analyzer checks code against the following rules:</p>
+                <ul>
+                    <li><strong>LINE_TOO_LONG</strong> (warn) - Lines exceeding 120 characters</li>
+                    <li><strong>TRAILING_WHITESPACE</strong> (info) - Trailing spaces or tabs</li>
+                    <li><strong>TAB_INDENT</strong> (info) - Tab characters in code</li>
+                    <li><strong>TODO_FOUND</strong> (warn) - TODO or FIXME comments</li>
+                    <li><strong>DEBUG_PRINT</strong> (info) - Debug print statements</li>
+                    <li><strong>HARDCODED_SECRET</strong> (error) - Potential hardcoded secrets</li>
+                    <li><strong>INSECURE_HTTP_URL</strong> (warn) - Insecure HTTP URLs</li>
+                    <li><strong>FILE_TOO_LARGE</strong> (warn) - Files exceeding 800 lines</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Limitations</h5>
+            </div>
+            <div class="card-body">
+                <ul>
+                    <li>This is a primitive analyzer that works on plain text, not AST</li>
+                    <li>ZIP uploads are limited to 20 MB</li>
+                    <li>Code snippets are limited to 50,000 characters</li>
+                    <li>Only specific file extensions are analyzed (see allowed extensions)</li>
+                    <li>Analysis is synchronous (no background processing)</li>
+                    <li>No semantic analysis - only pattern matching</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Supported File Extensions</h5>
+            </div>
+            <div class="card-body">
+                <p class="mb-0">
+                    .go, .cs, .js, .ts, .py, .java, .cpp, .h, .hpp, .php, .rb, .kt, .swift, .sql, .html, .css, .md
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}
+
