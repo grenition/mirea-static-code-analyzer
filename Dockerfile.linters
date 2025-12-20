@@ -3,20 +3,15 @@ FROM ubuntu:22.04
 # Avoid interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install system dependencies
+# Install system dependencies (without nodejs/npm to avoid conflicts)
 RUN apt-get update && apt-get install -y \
     curl \
     wget \
     git \
     python3 \
     python3-pip \
-    nodejs \
-    npm \
     golang-go \
-    openjdk-17-jdk \
     php \
-    ruby \
-    ruby-dev \
     build-essential \
     clang \
     && rm -rf /var/lib/apt/lists/*
@@ -24,8 +19,14 @@ RUN apt-get update && apt-get install -y \
 # Install Python linters
 RUN pip3 install --no-cache-dir pylint flake8 black
 
-# Install JavaScript/TypeScript linters
-RUN npm install -g eslint typescript @typescript-eslint/parser @typescript-eslint/eslint-plugin
+# Install Node.js 20 (LTS) - remove any existing nodejs packages first
+RUN apt-get update && \
+    apt-get remove -y nodejs npm libnode-dev 2>/dev/null || true && \
+    apt-get autoremove -y && \
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y nodejs && \
+    npm install -g eslint@8.57.0 typescript @typescript-eslint/parser@5.62.0 @typescript-eslint/eslint-plugin@5.62.0 && \
+    rm -rf /var/lib/apt/lists/*
 
 # Install Go linter
 RUN curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b /usr/local/bin v1.55.2
@@ -34,14 +35,8 @@ RUN curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/i
 RUN curl -L https://github.com/PHP-CS-Fixer/PHP-CS-Fixer/releases/download/v3.48.0/php-cs-fixer.phar -o /usr/local/bin/php-cs-fixer && \
     chmod +x /usr/local/bin/php-cs-fixer
 
-# Install Ruby linter
-RUN gem install rubocop --no-document
-
 # Install C/C++ linter (cppcheck)
 RUN apt-get update && apt-get install -y cppcheck && rm -rf /var/lib/apt/lists/*
-
-# Install Java linter (checkstyle)
-RUN wget -q https://github.com/checkstyle/checkstyle/releases/download/checkstyle-10.12.5/checkstyle-10.12.5-all.jar -O /usr/local/bin/checkstyle.jar
 
 # Create working directory
 WORKDIR /workspace

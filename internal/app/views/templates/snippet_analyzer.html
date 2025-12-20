@@ -34,9 +34,7 @@
                         <option value="python">Python (Pylint)</option>
                         <option value="go">Go (golangci-lint)</option>
                         <option value="cpp">C/C++ (cppcheck)</option>
-                        <option value="ruby">Ruby (Rubocop)</option>
                         <option value="php">PHP (PHP Syntax Checker)</option>
-                        <option value="java">Java (Checkstyle)</option>
                         <option value="generic" selected>Общий (паттерн-правила)</option>
                     </select>
                     <small class="form-text text-muted">Выберите язык для применения соответствующего линтера</small>
@@ -58,6 +56,12 @@
                     <label class="form-check-label" for="autoAnalyze">
                         <i class="bi bi-arrow-repeat me-1"></i>Автоматический анализ при изменении кода (задержка 1 сек)
                     </label>
+                </div>
+                <div class="mt-2">
+                    <small class="text-muted">
+                        <i class="bi bi-info-circle me-1"></i>
+                        <span id="linterInfo">Используемый линтер: Общий (паттерн-правила)</span>
+                    </small>
                 </div>
             </div>
         </div>
@@ -130,7 +134,7 @@
                         </div>
                     </div>
 
-                    <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                    <div class="table-responsive" style="max-height: 400px;">
                         <table class="table table-sm table-hover" id="issuesTable">
                             <thead class="table-light sticky-top">
                                 <tr>
@@ -163,15 +167,65 @@ const languageToExtension = {
     'python': '.py',
     'go': '.go',
     'cpp': '.cpp',
-    'ruby': '.rb',
     'php': '.php',
-    'java': '.java',
     'generic': '.txt'
 };
+
+// Маппинг языков на названия линтеров
+const languageToLinter = {
+    'javascript': 'ESLint',
+    'typescript': 'ESLint',
+    'python': 'Pylint',
+    'go': 'golangci-lint',
+    'cpp': 'cppcheck',
+    'php': 'PHP Syntax Checker',
+    'generic': 'Общий (паттерн-правила)'
+};
+
+// Функция для обновления видимости кнопки анализа
+function updateAnalyzeButtonVisibility() {
+    const autoAnalyze = document.getElementById('autoAnalyze').checked;
+    const analyzeBtn = document.getElementById('analyzeBtn');
+    if (autoAnalyze) {
+        analyzeBtn.style.display = 'none';
+    } else {
+        analyzeBtn.style.display = 'inline-block';
+    }
+}
+
+// Функция для обновления информации о линтере
+function updateLinterInfo() {
+    const language = document.getElementById('language').value;
+    const linterName = languageToLinter[language] || 'Общий (паттерн-правила)';
+    document.getElementById('linterInfo').textContent = `Используемый линтер: ${linterName}`;
+}
 
 // Character counter
 const codeEditor = document.getElementById('code_editor');
 const charCounter = document.getElementById('char-counter');
+const languageSelect = document.getElementById('language');
+const autoAnalyzeCheckbox = document.getElementById('autoAnalyze');
+
+// Инициализация при загрузке страницы
+updateAnalyzeButtonVisibility();
+updateLinterInfo();
+
+// Обработчик изменения языка
+languageSelect.addEventListener('change', function() {
+    updateLinterInfo();
+    // Автоматически анализировать при изменении языка, если включен автоанализ и есть код
+    if (autoAnalyzeCheckbox.checked && codeEditor.value.trim().length > 0) {
+        clearTimeout(autoAnalyzeTimeout);
+        autoAnalyzeTimeout = setTimeout(() => {
+            analyzeCode();
+        }, 500); // Меньшая задержка при смене языка
+    }
+});
+
+// Обработчик изменения чекбокса автоматического анализа
+autoAnalyzeCheckbox.addEventListener('change', function() {
+    updateAnalyzeButtonVisibility();
+});
 
 codeEditor.addEventListener('input', function() {
     const length = this.value.length;
@@ -188,7 +242,7 @@ codeEditor.addEventListener('input', function() {
     }
 
     // Auto-analyze if enabled
-    if (document.getElementById('autoAnalyze').checked && length > 0) {
+    if (autoAnalyzeCheckbox.checked && length > 0) {
         clearTimeout(autoAnalyzeTimeout);
         autoAnalyzeTimeout = setTimeout(() => {
             analyzeCode();

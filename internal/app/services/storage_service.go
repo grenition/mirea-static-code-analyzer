@@ -21,7 +21,7 @@ type StorageService struct {
 func NewStorageService(storageDir string) *StorageService {
 	allowedExts := map[string]bool{
 		".go": true, ".cs": true, ".js": true, ".ts": true,
-		".py": true, ".java": true, ".cpp": true, ".h": true,
+		".py": true, ".cpp": true, ".h": true,
 		".hpp": true, ".php": true, ".rb": true, ".kt": true,
 		".swift": true, ".sql": true, ".html": true, ".css": true,
 		".md": true,

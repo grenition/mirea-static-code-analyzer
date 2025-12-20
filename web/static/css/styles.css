@@ -111,6 +111,32 @@ main {
     background-color: #f8f9fa;
 }
 
+/* Горизонтальный скролл для таблиц с ошибками */
+.table-responsive {
+    overflow-x: auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.table-responsive table {
+    min-width: 600px;
+}
+
+/* Для колонок кроме сообщения - без переноса */
+.table-responsive table th:not(:last-child),
+.table-responsive table td:not(:last-child) {
+    white-space: nowrap;
+}
+
+/* Для колонки с сообщением разрешаем перенос текста */
+.table-responsive table th:last-child,
+.table-responsive table td:last-child {
+    white-space: normal;
+    min-width: 200px;
+    max-width: 500px;
+    word-wrap: break-word;
+}
+
 /* Код */
 code {
     background-color: #f1f3f5;

@@ -283,13 +283,11 @@ func (s *AnalyzerService) getLanguageFromExt(ext string) string {
 		".tsx":  "typescript",
 		".py":   "python",
 		".go":   "go",
-		".java": "java",
 		".cpp":  "cpp",
 		".c":    "cpp",
 		".h":    "cpp",
 		".hpp":  "cpp",
 		".php":  "php",
-		".rb":   "ruby",
 		".kt":   "kotlin",
 		".swift": "swift",
 	}
@@ -335,8 +333,6 @@ func (s *AnalyzerService) runDockerLinters(filesByLang map[string][]FileInput, a
 			issues = s.runGolangciLint(ctx, files, dockerWorkDir)
 		case "cpp":
 			issues = s.runCppcheck(ctx, files, dockerWorkDir)
-		case "ruby":
-			issues = s.runRubocop(ctx, files, dockerWorkDir)
 		case "php":
 			issues = s.runPHPCS(ctx, files, dockerWorkDir)
 		}
@@ -377,8 +373,10 @@ func (s *AnalyzerService) createTempAnalysisDir(files []FileInput, analysisID st
 func (s *AnalyzerService) runESLint(ctx context.Context, files []FileInput, workDir string) []Issue {
 	var allIssues []Issue
 	for _, file := range files {
-		// Run ESLint on single file (use --no-eslintrc to avoid config issues)
-		cmd := []string{"npx", "--yes", "eslint", "--no-eslintrc", "--format", "compact", file.Path}
+		// Run ESLint on single file with basic rules
+		// Use --no-eslintrc to avoid config issues, enable basic rules via command line
+		// ESLint 8 syntax for rules
+		cmd := []string{"eslint", "--no-eslintrc", "--format", "compact", "--env", "es6,node", "--rule", "no-unused-vars: error", "--rule", "eqeqeq: error", "--rule", "no-console: warn", file.Path}
 		stdout, stderr, _ := s.dockerService.RunLinter(ctx, cmd, workDir)
 		// ESLint may return non-zero exit code with issues, check both stdout and stderr
 		output := stdout + stderr
@@ -393,9 +391,14 @@ func (s *AnalyzerService) runESLint(ctx context.Context, files []FileInput, work
 func (s *AnalyzerService) runPylint(ctx context.Context, files []FileInput, workDir string) []Issue {
 	var allIssues []Issue
 	for _, file := range files {
-		cmd := []string{"pylint", "--output-format=text", file.Path}
-		stdout, _, _ := s.dockerService.RunLinter(ctx, cmd, workDir)
-		issues := s.parser.ParsePylint(stdout, file.Path)
+		// Use absolute path in Docker container
+		filePathInDocker := filepath.Join(workDir, file.Path)
+		// Get errors and warnings (disable info/convention messages for cleaner output)
+		cmd := []string{"pylint", "--output-format=text", "--disable=C,R", filePathInDocker}
+		stdout, stderr, _ := s.dockerService.RunLinter(ctx, cmd, workDir)
+		output := stdout + stderr
+		// Parse with both original file path and Docker path for matching
+		issues := s.parser.ParsePylint(output, file.Path, filePathInDocker)
 		allIssues = append(allIssues, issues...)
 	}
 	return allIssues
@@ -403,13 +406,23 @@ func (s *AnalyzerService) runPylint(ctx context.Context, files []FileInput, work
 
 func (s *AnalyzerService) runGolangciLint(ctx context.Context, files []FileInput, workDir string) []Issue {
 	var allIssues []Issue
+	
+	// golangci-lint requires a go.mod file to work properly
+	// Create a temporary go.mod if it doesn't exist
+	goModPath := filepath.Join(workDir, "go.mod")
+	if _, err := os.Stat(goModPath); os.IsNotExist(err) {
+		// Create minimal go.mod
+		goModContent := "module temp\n\ngo 1.21\n"
+		os.WriteFile(goModPath, []byte(goModContent), 0644)
+	}
+	
 	// golangci-lint works on packages/directories
-	// Run on the workDir to analyze all Go files
-	cmd := []string{"golangci-lint", "run", "--no-config", "--disable-all", "--enable=errcheck,govet,staticcheck", "."}
-	stdout, _, _ := s.dockerService.RunLinter(ctx, cmd, workDir)
-	// Parse output for all files
+	// Run on each file individually to get better results
 	for _, file := range files {
-		issues := s.parser.ParseGolangciLint(stdout, file.Path)
+		cmd := []string{"golangci-lint", "run", "--no-config", "--disable-all", "--enable=errcheck,govet,staticcheck,unused,typecheck", file.Path}
+		stdout, stderr, _ := s.dockerService.RunLinter(ctx, cmd, workDir)
+		output := stdout + stderr
+		issues := s.parser.ParseGolangciLint(output, file.Path)
 		allIssues = append(allIssues, issues...)
 	}
 	return allIssues
@@ -418,24 +431,19 @@ func (s *AnalyzerService) runGolangciLint(ctx context.Context, files []FileInput
 func (s *AnalyzerService) runCppcheck(ctx context.Context, files []FileInput, workDir string) []Issue {
 	var allIssues []Issue
 	for _, file := range files {
-		cmd := []string{"cppcheck", "--enable=all", "--output-file=-", file.Path}
-		stdout, _, _ := s.dockerService.RunLinter(ctx, cmd, workDir)
-		issues := s.parser.ParseCppcheck(stdout, file.Path)
+		// Use absolute path in Docker container
+		filePathInDocker := filepath.Join(workDir, file.Path)
+		cmd := []string{"cppcheck", "--enable=all", "--inline-suppr", filePathInDocker}
+		stdout, stderr, _ := s.dockerService.RunLinter(ctx, cmd, workDir)
+		// cppcheck outputs to stderr
+		output := stdout + stderr
+		// Parse with both original file path and Docker path for matching
+		issues := s.parser.ParseCppcheck(output, file.Path, filePathInDocker)
 		allIssues = append(allIssues, issues...)
 	}
 	return allIssues
 }
 
-func (s *AnalyzerService) runRubocop(ctx context.Context, files []FileInput, workDir string) []Issue {
-	var allIssues []Issue
-	for _, file := range files {
-		cmd := []string{"rubocop", "--format", "simple", file.Path}
-		stdout, _, _ := s.dockerService.RunLinter(ctx, cmd, workDir)
-		issues := s.parser.ParseRubocop(stdout, file.Path)
-		allIssues = append(allIssues, issues...)
-	}
-	return allIssues
-}
 
 func (s *AnalyzerService) runPHPCS(ctx context.Context, files []FileInput, workDir string) []Issue {
 	var allIssues []Issue
@@ -445,7 +453,7 @@ func (s *AnalyzerService) runPHPCS(ctx context.Context, files []FileInput, workD
 		stdout, stderr, _ := s.dockerService.RunLinter(ctx, cmd, workDir)
 		output := stdout + stderr
 		// PHP -l outputs errors to stderr
-		if strings.Contains(output, "Parse error") || strings.Contains(output, "Fatal error") {
+		if strings.Contains(output, "Parse error") || strings.Contains(output, "Fatal error") || strings.Contains(output, "Warning") {
 			// Extract line number from PHP error
 			re := regexp.MustCompile(`on line (\d+)`)
 			matches := re.FindStringSubmatch(output)
@@ -455,8 +463,12 @@ func (s *AnalyzerService) runPHPCS(ctx context.Context, files []FileInput, workD
 					lineNum = &num
 				}
 			}
+			severity := "error"
+			if strings.Contains(output, "Warning") {
+				severity = "warn"
+			}
 			allIssues = append(allIssues, Issue{
-				Severity: "error",
+				Severity: severity,
 				RuleCode: "PHP_SYNTAX",
 				Message:  strings.TrimSpace(output),
 				FilePath: file.Path,
@@ -466,6 +478,7 @@ func (s *AnalyzerService) runPHPCS(ctx context.Context, files []FileInput, workD
 	}
 	return allIssues
 }
+
 
 func (s *AnalyzerService) ConvertToModels(issues []Issue, analysisID uuid.UUID) []*models.Issue {
 	issueModels := make([]*models.Issue, len(issues))
