@@ -1,11 +1,15 @@
-{{define "title"}}Analysis Details - Static Code Analyzer{{end}}
+{{define "title"}}Детали анализа - Анализатор кода{{end}}
 
 {{define "content"}}
 <div class="row">
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-center mb-4">
-            <h1>Analysis Details</h1>
-            <a href="/analyses" class="btn btn-outline-secondary">← Back to History</a>
+            <h1 class="fw-bold">
+                <i class="bi bi-file-text text-primary me-2"></i>Детали анализа
+            </h1>
+            <a href="/analyses" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-1"></i>Назад к истории
+            </a>
         </div>
 
         <!-- Summary Cards -->
@@ -13,24 +17,30 @@
             <div class="col-md-4">
                 <div class="card border-danger">
                     <div class="card-body text-center">
-                        <h5 class="card-title text-danger">Errors</h5>
-                        <h2 class="mb-0">{{.Summary.ErrorCount}}</h2>
+                        <h5 class="card-title text-danger">
+                            <i class="bi bi-x-circle me-1"></i>Ошибки
+                        </h5>
+                        <h3 class="mb-0">{{.Summary.ErrorCount}}</h3>
                     </div>
                 </div>
             </div>
             <div class="col-md-4">
                 <div class="card border-warning">
                     <div class="card-body text-center">
-                        <h5 class="card-title text-warning">Warnings</h5>
-                        <h2 class="mb-0">{{.Summary.WarnCount}}</h2>
+                        <h5 class="card-title text-warning">
+                            <i class="bi bi-exclamation-triangle me-1"></i>Предупреждения
+                        </h5>
+                        <h3 class="mb-0">{{.Summary.WarnCount}}</h3>
                     </div>
                 </div>
             </div>
             <div class="col-md-4">
                 <div class="card border-info">
                     <div class="card-body text-center">
-                        <h5 class="card-title text-info">Info</h5>
-                        <h2 class="mb-0">{{.Summary.InfoCount}}</h2>
+                        <h5 class="card-title text-info">
+                            <i class="bi bi-info-circle me-1"></i>Информация
+                        </h5>
+                        <h3 class="mb-0">{{.Summary.InfoCount}}</h3>
                     </div>
                 </div>
             </div>
@@ -39,37 +49,49 @@
         <!-- Analysis Info -->
         <div class="card mb-4">
             <div class="card-header">
-                <h5 class="mb-0">Analysis Information</h5>
+                <h5 class="mb-0">
+                    <i class="bi bi-info-circle text-primary me-2"></i>Информация об анализе
+                </h5>
             </div>
             <div class="card-body">
                 <dl class="row">
-                    <dt class="col-sm-3">Project:</dt>
-                    <dd class="col-sm-9">{{.Project.Name}}</dd>
-                    <dt class="col-sm-3">Type:</dt>
+                    <dt class="col-sm-3"><i class="bi bi-folder me-1"></i>Проект:</dt>
+                    <dd class="col-sm-9"><strong>{{.Project.Name}}</strong></dd>
+                    <dt class="col-sm-3"><i class="bi bi-file-earmark me-1"></i>Тип:</dt>
                     <dd class="col-sm-9">
                         {{if eq .Analysis.InputType "zip"}}
-                            <span class="badge bg-primary">ZIP Archive</span>
+                            <span class="badge bg-primary">
+                                <i class="bi bi-file-zip me-1"></i>ZIP-архив
+                            </span>
                         {{else}}
-                            <span class="badge bg-success">Code Snippet</span>
+                            <span class="badge bg-success">
+                                <i class="bi bi-file-code me-1"></i>Фрагмент кода
+                            </span>
                         {{end}}
                     </dd>
-                    <dt class="col-sm-3">Status:</dt>
+                    <dt class="col-sm-3"><i class="bi bi-check-circle me-1"></i>Статус:</dt>
                     <dd class="col-sm-9">
                         {{if eq .Analysis.Status "Done"}}
-                            <span class="badge bg-success">Done</span>
+                            <span class="badge bg-success">
+                                <i class="bi bi-check-circle me-1"></i>Завершено
+                            </span>
                         {{else if eq .Analysis.Status "Running"}}
-                            <span class="badge bg-warning">Running</span>
+                            <span class="badge bg-warning">
+                                <i class="bi bi-hourglass-split me-1"></i>Выполняется
+                            </span>
                         {{else if eq .Analysis.Status "Failed"}}
-                            <span class="badge bg-danger">Failed</span>
+                            <span class="badge bg-danger">
+                                <i class="bi bi-x-circle me-1"></i>Ошибка
+                            </span>
                         {{else}}
                             <span class="badge bg-secondary">{{.Analysis.Status}}</span>
                         {{end}}
                     </dd>
-                    <dt class="col-sm-3">Created:</dt>
-                    <dd class="col-sm-9">{{.Analysis.CreatedAt.Format "2006-01-02 15:04:05"}}</dd>
+                    <dt class="col-sm-3"><i class="bi bi-calendar me-1"></i>Создан:</dt>
+                    <dd class="col-sm-9">{{.Analysis.CreatedAt.Format "02.01.2006 15:04:05"}}</dd>
                     {{if .Analysis.FinishedAt}}
-                    <dt class="col-sm-3">Finished:</dt>
-                    <dd class="col-sm-9">{{.Analysis.FinishedAt.Format "2006-01-02 15:04:05"}}</dd>
+                    <dt class="col-sm-3"><i class="bi bi-check2-circle me-1"></i>Завершён:</dt>
+                    <dd class="col-sm-9">{{.Analysis.FinishedAt.Format "02.01.2006 15:04:05"}}</dd>
                     {{end}}
                 </dl>
             </div>
@@ -78,12 +100,22 @@
         <!-- Issues Table -->
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">Issues ({{len .Issues}})</h5>
+                <h5 class="mb-0">
+                    <i class="bi bi-list-check me-2"></i>Проблемы ({{len .Issues}})
+                </h5>
                 <div>
-                    <button class="btn btn-sm btn-outline-primary" onclick="filterIssues('all')">All</button>
-                    <button class="btn btn-sm btn-outline-danger" onclick="filterIssues('error')">Errors</button>
-                    <button class="btn btn-sm btn-outline-warning" onclick="filterIssues('warn')">Warnings</button>
-                    <button class="btn btn-sm btn-outline-info" onclick="filterIssues('info')">Info</button>
+                    <button class="btn btn-sm btn-outline-primary" onclick="filterIssues('all')">
+                        <i class="bi bi-list-ul me-1"></i>Все
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="filterIssues('error')">
+                        <i class="bi bi-x-circle me-1"></i>Ошибки
+                    </button>
+                    <button class="btn btn-sm btn-outline-warning" onclick="filterIssues('warn')">
+                        <i class="bi bi-exclamation-triangle me-1"></i>Предупреждения
+                    </button>
+                    <button class="btn btn-sm btn-outline-info" onclick="filterIssues('info')">
+                        <i class="bi bi-info-circle me-1"></i>Информация
+                    </button>
                 </div>
             </div>
             <div class="card-body">
@@ -92,11 +124,11 @@
                     <table class="table table-sm table-hover" id="issuesTable">
                         <thead>
                             <tr>
-                                <th>Severity</th>
-                                <th>Rule</th>
-                                <th>File</th>
-                                <th>Line</th>
-                                <th>Message</th>
+                                <th><i class="bi bi-tag me-1"></i>Уровень</th>
+                                <th><i class="bi bi-code me-1"></i>Правило</th>
+                                <th><i class="bi bi-file me-1"></i>Файл</th>
+                                <th><i class="bi bi-list-ol me-1"></i>Строка</th>
+                                <th><i class="bi bi-chat-left-text me-1"></i>Сообщение</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -104,11 +136,17 @@
                             <tr data-severity="{{.Severity}}">
                                 <td>
                                     {{if eq .Severity "error"}}
-                                        <span class="badge bg-danger">Error</span>
+                                        <span class="badge bg-danger">
+                                            <i class="bi bi-x-circle me-1"></i>Ошибка
+                                        </span>
                                     {{else if eq .Severity "warn"}}
-                                        <span class="badge bg-warning">Warning</span>
+                                        <span class="badge bg-warning">
+                                            <i class="bi bi-exclamation-triangle me-1"></i>Предупреждение
+                                        </span>
                                     {{else}}
-                                        <span class="badge bg-info">Info</span>
+                                        <span class="badge bg-info">
+                                            <i class="bi bi-info-circle me-1"></i>Информация
+                                        </span>
                                     {{end}}
                                 </td>
                                 <td><code>{{.RuleCode}}</code></td>
@@ -127,8 +165,9 @@
                     </table>
                 </div>
                 {{else}}
-                <div class="alert alert-success">
-                    <p class="mb-0">No issues found! Your code looks clean.</p>
+                <div class="alert alert-success text-center py-4">
+                    <i class="bi bi-check-circle fs-2"></i>
+                    <p class="mb-0 mt-2">Проблем не найдено! Ваш код выглядит чистым.</p>
                 </div>
                 {{end}}
             </div>

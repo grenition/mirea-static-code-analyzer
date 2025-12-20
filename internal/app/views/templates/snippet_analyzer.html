@@ -1,10 +1,12 @@
-{{define "title"}}Live Code Analyzer - Static Code Analyzer{{end}}
+{{define "title"}}Живой анализатор - Анализатор кода{{end}}
 
 {{define "content"}}
 <div class="row">
     <div class="col-12">
-        <h1 class="mb-4">Live Code Analyzer</h1>
-        <p class="lead">Paste or edit your code and see analysis results in real-time</p>
+        <h1 class="mb-4 fw-bold">
+            <i class="bi bi-lightning-charge text-warning me-2"></i>Живой анализатор
+        </h1>
+        <p class="lead">Вставьте или отредактируйте код и получите результаты анализа в реальном времени</p>
     </div>
 </div>
 
@@ -13,44 +15,48 @@
     <div class="col-lg-6 mb-4">
         <div class="card">
             <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">📝 Code Editor</h5>
+                <h5 class="mb-0">
+                    <i class="bi bi-code-square me-2"></i>Редактор кода
+                </h5>
                 <button id="analyzeBtn" class="btn btn-light btn-sm">
-                    <span id="analyzeBtnText">Analyze</span>
+                    <span id="analyzeBtnText">Анализировать</span>
                     <span id="analyzeSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
                 </button>
             </div>
             <div class="card-body">
                 <div class="mb-3">
-                    <label for="extension" class="form-label">Language / Extension</label>
-                    <select class="form-select" id="extension">
-                        <option value=".txt" selected>.txt</option>
-                        <option value=".go">.go</option>
-                        <option value=".cs">.cs</option>
-                        <option value=".js">.js</option>
-                        <option value=".ts">.ts</option>
-                        <option value=".py">.py</option>
-                        <option value=".java">.java</option>
-                        <option value=".cpp">.cpp</option>
-                        <option value=".php">.php</option>
-                        <option value=".kt">.kt</option>
-                        <option value=".sql">.sql</option>
-                        <option value=".html">.html</option>
-                        <option value=".css">.css</option>
+                    <label for="language" class="form-label fw-semibold">
+                        <i class="bi bi-translate me-1"></i>Язык программирования
+                    </label>
+                    <select class="form-select" id="language">
+                        <option value="javascript">JavaScript (ESLint)</option>
+                        <option value="typescript">TypeScript (ESLint)</option>
+                        <option value="python">Python (Pylint)</option>
+                        <option value="go">Go (golangci-lint)</option>
+                        <option value="cpp">C/C++ (cppcheck)</option>
+                        <option value="ruby">Ruby (Rubocop)</option>
+                        <option value="php">PHP (PHP Syntax Checker)</option>
+                        <option value="java">Java (Checkstyle)</option>
+                        <option value="generic" selected>Общий (паттерн-правила)</option>
                     </select>
+                    <small class="form-text text-muted">Выберите язык для применения соответствующего линтера</small>
                 </div>
                 <div class="mb-3">
-                    <label for="code_editor" class="form-label">Code (max 50,000 characters)</label>
+                    <label for="code_editor" class="form-label fw-semibold">
+                        <i class="bi bi-file-code me-1"></i>Код (максимум 50,000 символов)
+                    </label>
                     <textarea class="form-control font-monospace" id="code_editor" rows="20" 
-                              style="font-size: 0.9em; font-family: 'Courier New', monospace;" 
-                              placeholder="Paste your code here or start typing..."></textarea>
+                              style="font-family: 'Fira Code', 'Courier New', monospace;" 
+                              placeholder="Вставьте ваш код здесь или начните печатать..."></textarea>
                     <small class="form-text text-muted">
-                        <span id="char-counter">0 / 50,000 characters</span>
+                        <i class="bi bi-info-circle me-1"></i>
+                        <span id="char-counter">0 / 50,000 символов</span>
                     </small>
                 </div>
                 <div class="form-check">
                     <input class="form-check-input" type="checkbox" id="autoAnalyze" checked>
                     <label class="form-check-label" for="autoAnalyze">
-                        Auto-analyze on code change (with 1s delay)
+                        <i class="bi bi-arrow-repeat me-1"></i>Автоматический анализ при изменении кода (задержка 1 сек)
                     </label>
                 </div>
             </div>
@@ -61,11 +67,14 @@
     <div class="col-lg-6 mb-4">
         <div class="card">
             <div class="card-header bg-success text-white">
-                <h5 class="mb-0">📊 Analysis Results</h5>
+                <h5 class="mb-0">
+                    <i class="bi bi-graph-up me-2"></i>Результаты анализа
+                </h5>
             </div>
             <div class="card-body">
                 <div id="resultsPlaceholder" class="text-center text-muted py-5">
-                    <p>No analysis yet. Start typing your code to see results automatically.</p>
+                    <i class="bi bi-clipboard-data fs-1 opacity-25"></i>
+                    <p class="mt-3">Анализ ещё не выполнен. Начните вводить код, чтобы увидеть результаты автоматически.</p>
                 </div>
                 
                 <div id="resultsContent" class="d-none">
@@ -74,24 +83,30 @@
                         <div class="col-4">
                             <div class="card border-danger text-center">
                                 <div class="card-body p-2">
-                                    <h6 class="card-title text-danger mb-0">Errors</h6>
-                                    <h4 class="mb-0" id="errorCount">0</h4>
+                                    <h6 class="card-title text-danger mb-1">
+                                        <i class="bi bi-x-circle me-1"></i>Ошибки
+                                    </h6>
+                                    <h3 class="mb-0" id="errorCount">0</h3>
                                 </div>
                             </div>
                         </div>
                         <div class="col-4">
                             <div class="card border-warning text-center">
                                 <div class="card-body p-2">
-                                    <h6 class="card-title text-warning mb-0">Warnings</h6>
-                                    <h4 class="mb-0" id="warnCount">0</h4>
+                                    <h6 class="card-title text-warning mb-1">
+                                        <i class="bi bi-exclamation-triangle me-1"></i>Предупреждения
+                                    </h6>
+                                    <h3 class="mb-0" id="warnCount">0</h3>
                                 </div>
                             </div>
                         </div>
                         <div class="col-4">
                             <div class="card border-info text-center">
                                 <div class="card-body p-2">
-                                    <h6 class="card-title text-info mb-0">Info</h6>
-                                    <h4 class="mb-0" id="infoCount">0</h4>
+                                    <h6 class="card-title text-info mb-1">
+                                        <i class="bi bi-info-circle me-1"></i>Информация
+                                    </h6>
+                                    <h3 class="mb-0" id="infoCount">0</h3>
                                 </div>
                             </div>
                         </div>
@@ -100,10 +115,18 @@
                     <!-- Issues Table -->
                     <div class="mb-3">
                         <div class="btn-group btn-group-sm" role="group">
-                            <button class="btn btn-outline-primary active" onclick="filterIssues('all')">All</button>
-                            <button class="btn btn-outline-danger" onclick="filterIssues('error')">Errors</button>
-                            <button class="btn btn-outline-warning" onclick="filterIssues('warn')">Warnings</button>
-                            <button class="btn btn-outline-info" onclick="filterIssues('info')">Info</button>
+                            <button class="btn btn-outline-primary active" onclick="filterIssues('all')">
+                                <i class="bi bi-list-ul me-1"></i>Все
+                            </button>
+                            <button class="btn btn-outline-danger" onclick="filterIssues('error')">
+                                <i class="bi bi-x-circle me-1"></i>Ошибки
+                            </button>
+                            <button class="btn btn-outline-warning" onclick="filterIssues('warn')">
+                                <i class="bi bi-exclamation-triangle me-1"></i>Предупреждения
+                            </button>
+                            <button class="btn btn-outline-info" onclick="filterIssues('info')">
+                                <i class="bi bi-info-circle me-1"></i>Информация
+                            </button>
                         </div>
                     </div>
 
@@ -111,10 +134,10 @@
                         <table class="table table-sm table-hover" id="issuesTable">
                             <thead class="table-light sticky-top">
                                 <tr>
-                                    <th>Severity</th>
-                                    <th>Rule</th>
-                                    <th>Line</th>
-                                    <th>Message</th>
+                                    <th><i class="bi bi-tag me-1"></i>Уровень</th>
+                                    <th><i class="bi bi-code me-1"></i>Правило</th>
+                                    <th><i class="bi bi-list-ol me-1"></i>Строка</th>
+                                    <th><i class="bi bi-chat-left-text me-1"></i>Сообщение</th>
                                 </tr>
                             </thead>
                             <tbody id="issuesBody">
@@ -133,17 +156,30 @@
 let autoAnalyzeTimeout = null;
 const maxLength = 50000;
 
+// Маппинг языков на расширения
+const languageToExtension = {
+    'javascript': '.js',
+    'typescript': '.ts',
+    'python': '.py',
+    'go': '.go',
+    'cpp': '.cpp',
+    'ruby': '.rb',
+    'php': '.php',
+    'java': '.java',
+    'generic': '.txt'
+};
+
 // Character counter
 const codeEditor = document.getElementById('code_editor');
 const charCounter = document.getElementById('char-counter');
 
 codeEditor.addEventListener('input', function() {
     const length = this.value.length;
-    charCounter.textContent = `${length} / ${maxLength} characters`;
+    charCounter.textContent = `${length} / ${maxLength} символов`;
     
     if (length > maxLength) {
         charCounter.classList.add('text-danger');
-        charCounter.textContent += ' (exceeds limit!)';
+        charCounter.textContent += ' (превышен лимит!)';
     } else if (length > maxLength - 1000) {
         charCounter.classList.remove('text-danger');
         charCounter.classList.add('text-warning');
@@ -165,15 +201,16 @@ document.getElementById('analyzeBtn').addEventListener('click', analyzeCode);
 
 function analyzeCode() {
     const code = codeEditor.value.trim();
-    const extension = document.getElementById('extension').value;
+    const language = document.getElementById('language').value;
+    const extension = languageToExtension[language] || '.txt';
 
     if (!code) {
-        showError('Please enter some code to analyze.');
+        showError('Пожалуйста, введите код для анализа.');
         return;
     }
 
     if (code.length > maxLength) {
-        showError(`Code is too long (${code.length} characters, max ${maxLength}).`);
+        showError(`Код слишком длинный (${code.length} символов, максимум ${maxLength}).`);
         return;
     }
 
@@ -182,7 +219,7 @@ function analyzeCode() {
     const btnText = document.getElementById('analyzeBtnText');
     const spinner = document.getElementById('analyzeSpinner');
     btn.disabled = true;
-    btnText.textContent = 'Analyzing...';
+    btnText.textContent = 'Анализ...';
     spinner.classList.remove('d-none');
 
     // Hide previous results/errors
@@ -208,11 +245,11 @@ function analyzeCode() {
         }
     })
     .catch(error => {
-        showError('Failed to analyze code: ' + error.message);
+        showError('Не удалось проанализировать код: ' + error.message);
     })
     .finally(() => {
         btn.disabled = false;
-        btnText.textContent = 'Analyze';
+        btnText.textContent = 'Анализировать';
         spinner.classList.add('d-none');
     });
 }
@@ -233,10 +270,10 @@ function displayResults(data) {
             row.setAttribute('data-severity', issue.severity);
             
             const severityBadge = issue.severity === 'error' ? 
-                '<span class="badge bg-danger">Error</span>' :
+                '<span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>Ошибка</span>' :
                 issue.severity === 'warn' ?
-                '<span class="badge bg-warning">Warning</span>' :
-                '<span class="badge bg-info">Info</span>';
+                '<span class="badge bg-warning"><i class="bi bi-exclamation-triangle me-1"></i>Предупреждение</span>' :
+                '<span class="badge bg-info"><i class="bi bi-info-circle me-1"></i>Информация</span>';
 
             row.innerHTML = `
                 <td>${severityBadge}</td>
@@ -247,7 +284,7 @@ function displayResults(data) {
             issuesBody.appendChild(row);
         });
     } else {
-        issuesBody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No issues found! Your code looks clean.</td></tr>';
+        issuesBody.innerHTML = '<tr><td colspan="4" class="text-center text-muted"><i class="bi bi-check-circle me-2"></i>Проблем не найдено! Ваш код выглядит чистым.</td></tr>';
     }
 
     // Show results
@@ -257,7 +294,7 @@ function displayResults(data) {
 
 function showError(message) {
     const errorDiv = document.getElementById('errorMessage');
-    errorDiv.textContent = message;
+    errorDiv.innerHTML = '<i class="bi bi-exclamation-triangle me-2"></i>' + message;
     errorDiv.classList.remove('d-none');
     document.getElementById('resultsPlaceholder').classList.remove('d-none');
     document.getElementById('resultsContent').classList.add('d-none');

@@ -18,6 +18,21 @@ services:
       timeout: 5s
       retries: 5
 
+  linters:
+    build:
+      context: .
+      dockerfile: Dockerfile.linters
+    container_name: static_analyzer_linters
+    volumes:
+      - ./storage:/workspace
+    command: tail -f /dev/null  # Keep container running
+    networks:
+      - analyzer_network
+
+networks:
+  analyzer_network:
+    driver: bridge
+
 volumes:
   postgres_data:
 

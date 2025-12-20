@@ -132,7 +132,7 @@ func (c *UploadController) HandleZipUpload(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Run analysis
-	issues, summary := c.analyzerService.Analyze(files)
+	issues, summary := c.analyzerService.Analyze(files, analysis.ID.String())
 
 	// Save summary
 	summaryJSON, _ := json.Marshal(summary)
@@ -212,7 +212,7 @@ func (c *UploadController) HandleSnippetUpload(w http.ResponseWriter, r *http.Re
 	}
 
 	// Run analysis
-	issues, summary := c.analyzerService.Analyze(files)
+	issues, summary := c.analyzerService.Analyze(files, analysis.ID.String())
 
 	// Save summary
 	summaryJSON, _ := json.Marshal(summary)
@@ -296,7 +296,7 @@ func (c *UploadController) HandleSnippetAnalyzeAPI(w http.ResponseWriter, r *htt
 	}
 
 	// Run analysis
-	issues, summary := c.analyzerService.Analyze(files)
+	issues, summary := c.analyzerService.Analyze(files, analysis.ID.String())
 
 	// Save summary
 	summaryJSON, _ := json.Marshal(summary)

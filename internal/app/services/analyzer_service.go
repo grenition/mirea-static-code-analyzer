@@ -1,14 +1,23 @@
 package services
 
 import (
+	"context"
+	"os"
+	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
+	"time"
+
 	"github.com/google/uuid"
 	"webapp/internal/app/models"
 )
 
 type AnalyzerService struct {
-	rules []Rule
+	rules         []Rule
+	dockerService *DockerService
+	parser        *LinterParser
+	storageDir    string
 }
 
 type Rule struct {
@@ -26,7 +35,15 @@ type Issue struct {
 }
 
 func NewAnalyzerService() *AnalyzerService {
-	service := &AnalyzerService{}
+	storageDir := os.Getenv("STORAGE_DIR")
+	if storageDir == "" {
+		storageDir = "./storage"
+	}
+	service := &AnalyzerService{
+		dockerService: NewDockerService(),
+		parser:        NewLinterParser(),
+		storageDir:    storageDir,
+	}
 	service.initRules()
 	return service
 }
@@ -208,9 +225,17 @@ func (s *AnalyzerService) initRules() {
 	}
 }
 
-func (s *AnalyzerService) Analyze(files []FileInput) ([]Issue, map[string]int) {
+func (s *AnalyzerService) Analyze(files []FileInput, analysisID string) ([]Issue, map[string]int) {
 	var allIssues []Issue
 
+	// Group files by language for Docker analysis
+	filesByLang := s.groupFilesByLanguage(files)
+
+	// Run Docker-based linters
+	dockerIssues := s.runDockerLinters(filesByLang, analysisID)
+	allIssues = append(allIssues, dockerIssues...)
+
+	// Run simple rules as fallback/complement
 	for _, file := range files {
 		for _, rule := range s.rules {
 			issues := rule.Check(file)
@@ -236,6 +261,210 @@ func (s *AnalyzerService) Analyze(files []FileInput) ([]Issue, map[string]int) {
 	}
 
 	return allIssues, summary
+}
+
+func (s *AnalyzerService) groupFilesByLanguage(files []FileInput) map[string][]FileInput {
+	groups := make(map[string][]FileInput)
+	for _, file := range files {
+		ext := strings.ToLower(filepath.Ext(file.Path))
+		lang := s.getLanguageFromExt(ext)
+		if lang != "" {
+			groups[lang] = append(groups[lang], file)
+		}
+	}
+	return groups
+}
+
+func (s *AnalyzerService) getLanguageFromExt(ext string) string {
+	langMap := map[string]string{
+		".js":   "javascript",
+		".jsx":  "javascript",
+		".ts":   "typescript",
+		".tsx":  "typescript",
+		".py":   "python",
+		".go":   "go",
+		".java": "java",
+		".cpp":  "cpp",
+		".c":    "cpp",
+		".h":    "cpp",
+		".hpp":  "cpp",
+		".php":  "php",
+		".rb":   "ruby",
+		".kt":   "kotlin",
+		".swift": "swift",
+	}
+	return langMap[ext]
+}
+
+func (s *AnalyzerService) runDockerLinters(filesByLang map[string][]FileInput, analysisID string) []Issue {
+	var allIssues []Issue
+
+	// Check if Docker container is available
+	if err := s.dockerService.EnsureContainerRunning(); err != nil {
+		// Container not running, skip Docker linters
+		return allIssues
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	for lang, files := range filesByLang {
+		// Create temporary directory for this analysis
+		tmpDir, err := s.createTempAnalysisDir(files, analysisID)
+		if err != nil {
+			continue
+		}
+		defer os.RemoveAll(tmpDir)
+
+		// Get Docker workdir path (storage is mounted at /workspace)
+		// tmpDir is relative to storageDir, so we need the relative path
+		relPath, err := filepath.Rel(s.storageDir, tmpDir)
+		if err != nil {
+			relPath = filepath.Base(tmpDir)
+		}
+		dockerWorkDir := filepath.Join("/workspace", relPath)
+
+		// Run appropriate linter based on language
+		var issues []Issue
+		switch lang {
+		case "javascript", "typescript":
+			issues = s.runESLint(ctx, files, dockerWorkDir)
+		case "python":
+			issues = s.runPylint(ctx, files, dockerWorkDir)
+		case "go":
+			issues = s.runGolangciLint(ctx, files, dockerWorkDir)
+		case "cpp":
+			issues = s.runCppcheck(ctx, files, dockerWorkDir)
+		case "ruby":
+			issues = s.runRubocop(ctx, files, dockerWorkDir)
+		case "php":
+			issues = s.runPHPCS(ctx, files, dockerWorkDir)
+		}
+
+		allIssues = append(allIssues, issues...)
+	}
+
+	return allIssues
+}
+
+func (s *AnalyzerService) createTempAnalysisDir(files []FileInput, analysisID string) (string, error) {
+	// Use analysisID to create a consistent directory
+	analysisDir := filepath.Join(s.storageDir, analysisID, "linter_analysis")
+	if err := os.MkdirAll(analysisDir, 0755); err != nil {
+		return "", err
+	}
+	
+	// Create a unique subdirectory for this batch
+	tmpDir, err := os.MkdirTemp(analysisDir, "batch-*")
+	if err != nil {
+		return "", err
+	}
+
+	for _, file := range files {
+		filePath := filepath.Join(tmpDir, file.Path)
+		dir := filepath.Dir(filePath)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return tmpDir, err
+		}
+		if err := os.WriteFile(filePath, file.Content, 0644); err != nil {
+			return tmpDir, err
+		}
+	}
+
+	return tmpDir, nil
+}
+
+func (s *AnalyzerService) runESLint(ctx context.Context, files []FileInput, workDir string) []Issue {
+	var allIssues []Issue
+	for _, file := range files {
+		// Run ESLint on single file (use --no-eslintrc to avoid config issues)
+		cmd := []string{"npx", "--yes", "eslint", "--no-eslintrc", "--format", "compact", file.Path}
+		stdout, stderr, _ := s.dockerService.RunLinter(ctx, cmd, workDir)
+		// ESLint may return non-zero exit code with issues, check both stdout and stderr
+		output := stdout + stderr
+		if output != "" {
+			issues := s.parser.ParseESLint(output, file.Path)
+			allIssues = append(allIssues, issues...)
+		}
+	}
+	return allIssues
+}
+
+func (s *AnalyzerService) runPylint(ctx context.Context, files []FileInput, workDir string) []Issue {
+	var allIssues []Issue
+	for _, file := range files {
+		cmd := []string{"pylint", "--output-format=text", file.Path}
+		stdout, _, _ := s.dockerService.RunLinter(ctx, cmd, workDir)
+		issues := s.parser.ParsePylint(stdout, file.Path)
+		allIssues = append(allIssues, issues...)
+	}
+	return allIssues
+}
+
+func (s *AnalyzerService) runGolangciLint(ctx context.Context, files []FileInput, workDir string) []Issue {
+	var allIssues []Issue
+	// golangci-lint works on packages/directories
+	// Run on the workDir to analyze all Go files
+	cmd := []string{"golangci-lint", "run", "--no-config", "--disable-all", "--enable=errcheck,govet,staticcheck", "."}
+	stdout, _, _ := s.dockerService.RunLinter(ctx, cmd, workDir)
+	// Parse output for all files
+	for _, file := range files {
+		issues := s.parser.ParseGolangciLint(stdout, file.Path)
+		allIssues = append(allIssues, issues...)
+	}
+	return allIssues
+}
+
+func (s *AnalyzerService) runCppcheck(ctx context.Context, files []FileInput, workDir string) []Issue {
+	var allIssues []Issue
+	for _, file := range files {
+		cmd := []string{"cppcheck", "--enable=all", "--output-file=-", file.Path}
+		stdout, _, _ := s.dockerService.RunLinter(ctx, cmd, workDir)
+		issues := s.parser.ParseCppcheck(stdout, file.Path)
+		allIssues = append(allIssues, issues...)
+	}
+	return allIssues
+}
+
+func (s *AnalyzerService) runRubocop(ctx context.Context, files []FileInput, workDir string) []Issue {
+	var allIssues []Issue
+	for _, file := range files {
+		cmd := []string{"rubocop", "--format", "simple", file.Path}
+		stdout, _, _ := s.dockerService.RunLinter(ctx, cmd, workDir)
+		issues := s.parser.ParseRubocop(stdout, file.Path)
+		allIssues = append(allIssues, issues...)
+	}
+	return allIssues
+}
+
+func (s *AnalyzerService) runPHPCS(ctx context.Context, files []FileInput, workDir string) []Issue {
+	var allIssues []Issue
+	for _, file := range files {
+		// Use php -l for basic syntax checking
+		cmd := []string{"php", "-l", file.Path}
+		stdout, stderr, _ := s.dockerService.RunLinter(ctx, cmd, workDir)
+		output := stdout + stderr
+		// PHP -l outputs errors to stderr
+		if strings.Contains(output, "Parse error") || strings.Contains(output, "Fatal error") {
+			// Extract line number from PHP error
+			re := regexp.MustCompile(`on line (\d+)`)
+			matches := re.FindStringSubmatch(output)
+			var lineNum *int
+			if len(matches) >= 2 {
+				if num, err := strconv.Atoi(matches[1]); err == nil {
+					lineNum = &num
+				}
+			}
+			allIssues = append(allIssues, Issue{
+				Severity: "error",
+				RuleCode: "PHP_SYNTAX",
+				Message:  strings.TrimSpace(output),
+				FilePath: file.Path,
+				Line:     lineNum,
+			})
+		}
+	}
+	return allIssues
 }
 
 func (s *AnalyzerService) ConvertToModels(issues []Issue, analysisID uuid.UUID) []*models.Issue {

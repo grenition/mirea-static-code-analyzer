@@ -1,0 +1,51 @@
+FROM ubuntu:22.04
+
+# Avoid interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    wget \
+    git \
+    python3 \
+    python3-pip \
+    nodejs \
+    npm \
+    golang-go \
+    openjdk-17-jdk \
+    php \
+    ruby \
+    ruby-dev \
+    build-essential \
+    clang \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python linters
+RUN pip3 install --no-cache-dir pylint flake8 black
+
+# Install JavaScript/TypeScript linters
+RUN npm install -g eslint typescript @typescript-eslint/parser @typescript-eslint/eslint-plugin
+
+# Install Go linter
+RUN curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b /usr/local/bin v1.55.2
+
+# Install PHP linter
+RUN curl -L https://github.com/PHP-CS-Fixer/PHP-CS-Fixer/releases/download/v3.48.0/php-cs-fixer.phar -o /usr/local/bin/php-cs-fixer && \
+    chmod +x /usr/local/bin/php-cs-fixer
+
+# Install Ruby linter
+RUN gem install rubocop --no-document
+
+# Install C/C++ linter (cppcheck)
+RUN apt-get update && apt-get install -y cppcheck && rm -rf /var/lib/apt/lists/*
+
+# Install Java linter (checkstyle)
+RUN wget -q https://github.com/checkstyle/checkstyle/releases/download/checkstyle-10.12.5/checkstyle-10.12.5-all.jar -O /usr/local/bin/checkstyle.jar
+
+# Create working directory
+WORKDIR /workspace
+
+# Default command
+CMD ["/bin/bash"]
+

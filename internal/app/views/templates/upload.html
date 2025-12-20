@@ -1,32 +1,47 @@
-{{define "title"}}Upload - Static Code Analyzer{{end}}
+{{define "title"}}Загрузка - Анализатор кода{{end}}
 
 {{define "content"}}
 <div class="row">
     <div class="col-lg-8 mx-auto">
-        <h1 class="mb-4">Upload ZIP Archive</h1>
-        <p class="lead mb-4">Upload a ZIP file containing multiple source code files for analysis</p>
+        <h1 class="mb-4 fw-bold">
+            <i class="bi bi-file-zip text-primary me-2"></i>Загрузка ZIP-архива
+        </h1>
+        <p class="lead mb-4">Загрузите ZIP-файл, содержащий несколько исходных файлов для анализа</p>
 
         <div class="card">
             <div class="card-header bg-primary text-white">
-                <h5 class="mb-0">📦 Upload ZIP Archive</h5>
+                <h5 class="mb-0">
+                    <i class="bi bi-upload me-2"></i>Загрузка ZIP-архива
+                </h5>
             </div>
             <div class="card-body">
                 <form action="/upload/zip" method="POST" enctype="multipart/form-data">
                     <div class="mb-3">
-                        <label for="zip_project_name" class="form-label">Project Name</label>
-                        <input type="text" class="form-control" id="zip_project_name" name="project_name" required>
+                        <label for="zip_project_name" class="form-label fw-semibold">
+                            <i class="bi bi-folder me-1"></i>Название проекта
+                        </label>
+                        <input type="text" class="form-control" id="zip_project_name" name="project_name" 
+                               placeholder="Введите название проекта" required>
                     </div>
                     <div class="mb-3">
-                        <label for="zip_file" class="form-label">ZIP File (max 20MB)</label>
+                        <label for="zip_file" class="form-label fw-semibold">
+                            <i class="bi bi-file-earmark-zip me-1"></i>ZIP-файл (максимум 20 МБ)
+                        </label>
                         <input type="file" class="form-control" id="zip_file" name="zip_file" accept=".zip" required>
+                        <small class="form-text text-muted">Выберите ZIP-архив с исходным кодом</small>
                     </div>
-                    <button type="submit" class="btn btn-primary">Upload ZIP & Analyze</button>
+                    <button type="submit" class="btn btn-primary btn-lg w-100">
+                        <i class="bi bi-upload me-2"></i>Загрузить и проанализировать
+                    </button>
                 </form>
             </div>
         </div>
 
         <div class="mt-4 text-center">
-            <p class="text-muted">For single code snippets, use the <a href="/snippet-analyzer">Live Code Analyzer</a> instead.</p>
+            <p class="text-muted">
+                Для анализа одного фрагмента кода используйте 
+                <a href="/snippet-analyzer" class="text-primary fw-bold">Живой анализатор</a>
+            </p>
         </div>
     </div>
 </div>

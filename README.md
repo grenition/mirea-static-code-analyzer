@@ -5,8 +5,10 @@ A primitive but functional web service for static code analysis built with Golan
 ## Features
 
 - **Dual Input Modes**: Upload ZIP archives or paste code snippets directly
+- **Multi-Language Linters**: Uses popular CLI linters (ESLint, Pylint, golangci-lint, cppcheck, Rubocop, PHP linters) via Docker
 - **Language-Agnostic Analysis**: Works on plain text (no AST required)
 - **8+ Analysis Rules**: Detects common code issues
+- **Docker-Based Analysis**: Platform-independent linter execution in isolated containers
 - **Modern UI**: Bootstrap 5 with responsive design
 - **MVC Architecture**: Clear separation of concerns
 - **PostgreSQL Storage**: Persistent storage of analysis results
@@ -38,6 +40,7 @@ A primitive but functional web service for static code analysis built with Golan
 
 - Go 1.21 or later
 - PostgreSQL 12 or later
+- Docker and Docker Compose (for linter analysis)
 - VS Code (or any Go-compatible IDE)
 
 ## Setup Instructions
@@ -48,43 +51,37 @@ A primitive but functional web service for static code analysis built with Golan
 go mod download
 ```
 
-### 2. Set Up PostgreSQL
+### 2. Set Up Docker Services
 
-#### Option A: Using Docker (Recommended)
+The project includes Docker Compose configuration for both PostgreSQL and the linter container.
 
-Create a `docker-compose.yml` file:
-
-```yaml
-version: '3.8'
-services:
-  postgres:
-    image: postgres:15
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: static_analyzer
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-volumes:
-  postgres_data:
-```
-
-Start PostgreSQL:
+Start all services:
 
 ```bash
 docker-compose up -d
 ```
 
-#### Option B: Local PostgreSQL
+This will start:
+- **PostgreSQL**: Database for storing analysis results
+- **Linters Container**: Container with multiple language linters (ESLint, Pylint, golangci-lint, cppcheck, Rubocop, PHP linters)
+
+The linter container must be running for Docker-based analysis to work. If it's not running, the analyzer will fall back to simple pattern-based rules only.
+
+To rebuild the linter container after changes:
+
+```bash
+docker-compose build linters
+docker-compose up -d linters
+```
+
+#### Option B: Local PostgreSQL (without Docker)
 
 1. Install PostgreSQL on your system
 2. Create a database:
    ```sql
    CREATE DATABASE static_analyzer;
    ```
+3. Note: You'll still need Docker for the linter container, or analysis will use only basic pattern-based rules
 
 ### 3. Configure Database Connection
 
@@ -139,7 +136,22 @@ go run cmd/webapp/main.go
 
 ## Analysis Rules
 
-The analyzer checks code against the following rules:
+The analyzer uses a two-tier approach:
+
+### Docker-Based Linters (when container is running)
+
+The analyzer automatically detects file types and runs appropriate linters:
+
+- **JavaScript/TypeScript**: ESLint
+- **Python**: Pylint
+- **Go**: golangci-lint (errcheck, govet, staticcheck)
+- **C/C++**: cppcheck
+- **Ruby**: Rubocop
+- **PHP**: PHP syntax checker
+
+### Pattern-Based Rules (always active)
+
+These rules work on all file types:
 
 1. **LINE_TOO_LONG** (warn) - Lines exceeding 120 characters
 2. **TRAILING_WHITESPACE** (info) - Trailing spaces or tabs
@@ -150,6 +162,8 @@ The analyzer checks code against the following rules:
 7. **INSECURE_HTTP_URL** (warn) - Insecure HTTP URLs
 8. **FILE_TOO_LARGE** (warn) - Files exceeding 800 lines
 
+Both linter results and pattern-based rule results are combined in the final analysis report.
+
 ## Supported File Extensions
 
 The analyzer processes files with these extensions:
@@ -157,11 +171,11 @@ The analyzer processes files with these extensions:
 
 ## Limitations
 
-- Primitive text-based analysis (no AST parsing)
 - ZIP uploads limited to 20 MB
 - Code snippets limited to 50,000 characters
 - Synchronous analysis (no background processing)
-- Only pattern matching, no semantic analysis
+- Docker container must be running for linter-based analysis
+- Some linters may require configuration files for optimal results (ESLint uses --no-eslintrc by default)
 
 ## Safety Features
 
