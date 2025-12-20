@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -35,10 +36,10 @@ type Issue struct {
 }
 
 func NewAnalyzerService() *AnalyzerService {
-	storageDir := os.Getenv("STORAGE_DIR")
-	if storageDir == "" {
-		storageDir = "./storage"
-	}
+	// Use ./storage/tmp for temporary analysis files (Docker mounts ./storage to /workspace)
+	// These files are temporary and will be deleted after analysis
+	storageDir := "./storage/tmp"
+	os.MkdirAll(storageDir, 0755)
 	service := &AnalyzerService{
 		dockerService: NewDockerService(),
 		parser:        NewLinterParser(),
@@ -306,35 +307,90 @@ func (s *AnalyzerService) runDockerLinters(filesByLang map[string][]FileInput, a
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	// Collect all temp dirs for cleanup
+	var tempDirs []string
+	defer func() {
+		for _, tmpDir := range tempDirs {
+			os.RemoveAll(tmpDir)
+		}
+	}()
+
 	for lang, files := range filesByLang {
 		// Create temporary directory for this analysis
 		tmpDir, err := s.createTempAnalysisDir(files, analysisID)
 		if err != nil {
 			continue
 		}
-		defer os.RemoveAll(tmpDir)
+		tempDirs = append(tempDirs, tmpDir)
 
 		// Get Docker workdir path (storage is mounted at /workspace)
-		// tmpDir is relative to storageDir, so we need the relative path
-		relPath, err := filepath.Rel(s.storageDir, tmpDir)
+		// tmpDir is like ./storage/tmp/analysis-xxx, we need tmp/analysis-xxx
+		// Convert both to absolute paths for reliable relative path calculation
+		absTmpDir, err := filepath.Abs(tmpDir)
 		if err != nil {
-			relPath = filepath.Base(tmpDir)
+			absTmpDir = tmpDir
 		}
-		dockerWorkDir := filepath.Join("/workspace", relPath)
+		absStorageBase, err := filepath.Abs("./storage")
+		if err != nil {
+			absStorageBase, _ = filepath.Abs("storage")
+		}
+		
+		// Calculate relative path
+		relPath, err := filepath.Rel(absStorageBase, absTmpDir)
+		if err != nil {
+			// Fallback: try to extract path manually using string operations
+			tmpDirStr := strings.ReplaceAll(tmpDir, "\\", "/")
+			storageBaseStr := strings.ReplaceAll("./storage", "\\", "/")
+			// Remove leading ./ if present
+			if strings.HasPrefix(tmpDirStr, "./") {
+				tmpDirStr = tmpDirStr[2:]
+			}
+			if strings.HasPrefix(storageBaseStr, "./") {
+				storageBaseStr = storageBaseStr[2:]
+			}
+			if strings.HasPrefix(tmpDirStr, storageBaseStr) {
+				relPath = strings.TrimPrefix(tmpDirStr, storageBaseStr)
+				relPath = strings.TrimPrefix(relPath, "/")
+			} else {
+				// Last resort: use just the directory name
+				relPath = filepath.Base(tmpDir)
+			}
+		}
+		
+		// Normalize path separators for Docker (use forward slashes)
+		relPath = filepath.ToSlash(relPath)
+		// Remove any leading slashes
+		relPath = strings.TrimPrefix(relPath, "/")
+		dockerWorkDir := "/workspace/" + relPath
+		// Ensure no double slashes
+		dockerWorkDir = strings.ReplaceAll(dockerWorkDir, "//", "/")
 
 		// Run appropriate linter based on language
+		// Each language group gets its own linter
 		var issues []Issue
 		switch lang {
-		case "javascript", "typescript":
+		case "javascript":
+			// Only JavaScript files go to ESLint
+			issues = s.runESLint(ctx, files, dockerWorkDir)
+		case "typescript":
+			// Only TypeScript files go to ESLint (with TypeScript parser)
 			issues = s.runESLint(ctx, files, dockerWorkDir)
 		case "python":
+			// Only Python files go to Pylint
 			issues = s.runPylint(ctx, files, dockerWorkDir)
 		case "go":
+			// Only Go files go to golangci-lint
 			issues = s.runGolangciLint(ctx, files, dockerWorkDir)
 		case "cpp":
+			// Only C/C++ files go to cppcheck
 			issues = s.runCppcheck(ctx, files, dockerWorkDir)
 		case "php":
+			// Only PHP files go to PHP linter
 			issues = s.runPHPCS(ctx, files, dockerWorkDir)
+		default:
+			// Unknown language - skip linting for this group
+			// Files without recognized extensions are not linted
+			continue
 		}
 
 		allIssues = append(allIssues, issues...)
@@ -344,26 +400,20 @@ func (s *AnalyzerService) runDockerLinters(filesByLang map[string][]FileInput, a
 }
 
 func (s *AnalyzerService) createTempAnalysisDir(files []FileInput, analysisID string) (string, error) {
-	// Use analysisID to create a consistent directory
-	analysisDir := filepath.Join(s.storageDir, analysisID, "linter_analysis")
-	if err := os.MkdirAll(analysisDir, 0755); err != nil {
-		return "", err
-	}
-	
-	// Create a unique subdirectory for this batch
-	tmpDir, err := os.MkdirTemp(analysisDir, "batch-*")
+	// Create a unique temporary directory for this analysis batch
+	tmpDir, err := os.MkdirTemp(s.storageDir, "analysis-*")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to create temp dir: %w", err)
 	}
 
 	for _, file := range files {
 		filePath := filepath.Join(tmpDir, file.Path)
 		dir := filepath.Dir(filePath)
 		if err := os.MkdirAll(dir, 0755); err != nil {
-			return tmpDir, err
+			return tmpDir, fmt.Errorf("failed to create dir %s: %w", dir, err)
 		}
 		if err := os.WriteFile(filePath, file.Content, 0644); err != nil {
-			return tmpDir, err
+			return tmpDir, fmt.Errorf("failed to write file %s: %w", filePath, err)
 		}
 	}
 
@@ -373,10 +423,14 @@ func (s *AnalyzerService) createTempAnalysisDir(files []FileInput, analysisID st
 func (s *AnalyzerService) runESLint(ctx context.Context, files []FileInput, workDir string) []Issue {
 	var allIssues []Issue
 	for _, file := range files {
+		// Use absolute path in Docker container
+		filePathInDocker := filepath.Join(workDir, file.Path)
+		// Normalize path for Docker (use forward slashes)
+		filePathInDocker = filepath.ToSlash(filePathInDocker)
 		// Run ESLint on single file with basic rules
 		// Use --no-eslintrc to avoid config issues, enable basic rules via command line
 		// ESLint 8 syntax for rules
-		cmd := []string{"eslint", "--no-eslintrc", "--format", "compact", "--env", "es6,node", "--rule", "no-unused-vars: error", "--rule", "eqeqeq: error", "--rule", "no-console: warn", file.Path}
+		cmd := []string{"eslint", "--no-eslintrc", "--format", "compact", "--env", "es6,node", "--rule", "no-unused-vars: error", "--rule", "eqeqeq: error", "--rule", "no-console: warn", filePathInDocker}
 		stdout, stderr, _ := s.dockerService.RunLinter(ctx, cmd, workDir)
 		// ESLint may return non-zero exit code with issues, check both stdout and stderr
 		output := stdout + stderr
@@ -393,6 +447,8 @@ func (s *AnalyzerService) runPylint(ctx context.Context, files []FileInput, work
 	for _, file := range files {
 		// Use absolute path in Docker container
 		filePathInDocker := filepath.Join(workDir, file.Path)
+		// Normalize path for Docker (use forward slashes)
+		filePathInDocker = filepath.ToSlash(filePathInDocker)
 		// Get errors and warnings (disable info/convention messages for cleaner output)
 		cmd := []string{"pylint", "--output-format=text", "--disable=C,R", filePathInDocker}
 		stdout, stderr, _ := s.dockerService.RunLinter(ctx, cmd, workDir)
@@ -419,7 +475,11 @@ func (s *AnalyzerService) runGolangciLint(ctx context.Context, files []FileInput
 	// golangci-lint works on packages/directories
 	// Run on each file individually to get better results
 	for _, file := range files {
-		cmd := []string{"golangci-lint", "run", "--no-config", "--disable-all", "--enable=errcheck,govet,staticcheck,unused,typecheck", file.Path}
+		// Use absolute path in Docker container
+		filePathInDocker := filepath.Join(workDir, file.Path)
+		// Normalize path for Docker (use forward slashes)
+		filePathInDocker = filepath.ToSlash(filePathInDocker)
+		cmd := []string{"golangci-lint", "run", "--no-config", "--disable-all", "--enable=errcheck,govet,staticcheck,unused,typecheck", filePathInDocker}
 		stdout, stderr, _ := s.dockerService.RunLinter(ctx, cmd, workDir)
 		output := stdout + stderr
 		issues := s.parser.ParseGolangciLint(output, file.Path)
@@ -433,6 +493,8 @@ func (s *AnalyzerService) runCppcheck(ctx context.Context, files []FileInput, wo
 	for _, file := range files {
 		// Use absolute path in Docker container
 		filePathInDocker := filepath.Join(workDir, file.Path)
+		// Normalize path for Docker (use forward slashes)
+		filePathInDocker = filepath.ToSlash(filePathInDocker)
 		cmd := []string{"cppcheck", "--enable=all", "--inline-suppr", filePathInDocker}
 		stdout, stderr, _ := s.dockerService.RunLinter(ctx, cmd, workDir)
 		// cppcheck outputs to stderr
@@ -448,8 +510,12 @@ func (s *AnalyzerService) runCppcheck(ctx context.Context, files []FileInput, wo
 func (s *AnalyzerService) runPHPCS(ctx context.Context, files []FileInput, workDir string) []Issue {
 	var allIssues []Issue
 	for _, file := range files {
+		// Use absolute path in Docker container
+		filePathInDocker := filepath.Join(workDir, file.Path)
+		// Normalize path for Docker (use forward slashes)
+		filePathInDocker = filepath.ToSlash(filePathInDocker)
 		// Use php -l for basic syntax checking
-		cmd := []string{"php", "-l", file.Path}
+		cmd := []string{"php", "-l", filePathInDocker}
 		stdout, stderr, _ := s.dockerService.RunLinter(ctx, cmd, workDir)
 		output := stdout + stderr
 		// PHP -l outputs errors to stderr

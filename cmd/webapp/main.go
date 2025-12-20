@@ -40,16 +40,17 @@ func main() {
 		log.Fatalf("Failed to run migrations: %v", err)
 	}
 
-	// Create storage directory
-	storageDir := "./storage"
+	// Create temporary storage directory for Docker linters (files are deleted after analysis)
+	storageDir := "./storage/tmp"
 	if err := os.MkdirAll(storageDir, 0755); err != nil {
-		log.Fatalf("Failed to create storage directory: %v", err)
+		log.Fatalf("Failed to create temp storage directory: %v", err)
 	}
 
 	// Initialize repositories
 	projectRepo := repositories.NewProjectRepository(database)
 	analysisRepo := repositories.NewAnalysisRepository(database)
 	issueRepo := repositories.NewIssueRepository(database)
+	fileRepo := repositories.NewFileRepository(database)
 
 	// Initialize services
 	analyzerService := services.NewAnalyzerService()
@@ -58,8 +59,8 @@ func main() {
 	// Initialize controllers
 	tmpl := parseTemplates()
 	homeCtrl := controllers.NewHomeController(tmpl)
-	uploadCtrl := controllers.NewUploadController(tmpl, analyzerService, storageService, projectRepo, analysisRepo, issueRepo)
-	analysesCtrl := controllers.NewAnalysesController(tmpl, analysisRepo, projectRepo, issueRepo)
+	uploadCtrl := controllers.NewUploadController(tmpl, analyzerService, storageService, projectRepo, analysisRepo, issueRepo, fileRepo)
+	analysesCtrl := controllers.NewAnalysesController(tmpl, analysisRepo, projectRepo, issueRepo, fileRepo)
 	aboutCtrl := controllers.NewAboutController(tmpl)
 
 	// Setup router
@@ -82,6 +83,8 @@ func main() {
 	r.HandleFunc("/api/analyze/snippet", uploadCtrl.HandleSnippetAnalyzeAPI).Methods("POST")
 	r.HandleFunc("/analyses", analysesCtrl.List).Methods("GET")
 	r.HandleFunc("/analyses/{id}", analysesCtrl.Details).Methods("GET")
+	r.HandleFunc("/analyses/{id}/delete", analysesCtrl.Delete).Methods("POST")
+	r.HandleFunc("/analyses/{id}/files/{fileId}", analysesCtrl.GetFileContent).Methods("GET")
 	r.HandleFunc("/about", aboutCtrl.Index).Methods("GET")
 
 	// Start server

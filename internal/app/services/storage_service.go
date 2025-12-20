@@ -49,6 +49,14 @@ func (s *StorageService) ExtractZip(zipPath, destDir string) ([]FileInput, error
 			continue
 		}
 
+		// Skip macOS metadata files
+		// Skip __MACOSX directory and ._ files (macOS resource fork files)
+		if strings.HasPrefix(cleanPath, "__MACOSX/") || 
+		   strings.HasPrefix(cleanPath, "__MACOSX\\") ||
+		   strings.HasPrefix(filepath.Base(cleanPath), "._") {
+			continue
+		}
+
 		// Check extension
 		ext := strings.ToLower(filepath.Ext(cleanPath))
 		if !s.allowedExts[ext] {

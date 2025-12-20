@@ -97,6 +97,33 @@
             </div>
         </div>
 
+        <!-- Files List -->
+        {{if .Files}}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-files me-2"></i>Проанализированные файлы ({{len .Files}})
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="list-group">
+                    {{range .Files}}
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="bi bi-file-code me-2"></i>
+                            <strong>{{.FilePath}}</strong>
+                            <small class="text-muted ms-2">({{len .Content}} байт)</small>
+                        </div>
+                        <button class="btn btn-sm btn-outline-primary" onclick="showFileContent('{{.ID}}', '{{.FilePath}}')">
+                            <i class="bi bi-eye me-1"></i>Просмотр
+                        </button>
+                    </div>
+                    {{end}}
+                </div>
+            </div>
+        </div>
+        {{end}}
+
         <!-- Issues Table -->
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
@@ -175,7 +202,80 @@
     </div>
 </div>
 
+<!-- File Content Modal -->
+<div class="modal fade" id="fileContentModal" tabindex="-1" aria-labelledby="fileContentModalLabel" aria-hidden="true" data-bs-backdrop="false" data-bs-keyboard="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="fileContentModalLabel">
+                    <i class="bi bi-file-code me-2"></i><span id="fileContentTitle">Содержимое файла</span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+            </div>
+            <div class="modal-body">
+                <pre id="fileContentBody" class="bg-light p-3 rounded" style="max-height: 500px; overflow: auto; white-space: pre-wrap; word-wrap: break-word; font-size: 0.875rem;"></pre>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
+let fileContentModal = null;
+
+// Инициализация модального окна при загрузке страницы
+document.addEventListener('DOMContentLoaded', function() {
+    const modalElement = document.getElementById('fileContentModal');
+    if (modalElement) {
+        fileContentModal = new bootstrap.Modal(modalElement, {
+            backdrop: false,  // Отключаем backdrop полностью
+            keyboard: true,
+            focus: true
+        });
+        
+        // Обработчик показа модального окна - удаляем backdrop, если он появился
+        modalElement.addEventListener('shown.bs.modal', function() {
+            // Удаляем backdrop, если он все-таки появился
+            const backdrops = document.querySelectorAll('.modal-backdrop');
+            backdrops.forEach(backdrop => {
+                backdrop.remove();
+            });
+        });
+        
+        // Обработчик закрытия модального окна
+        modalElement.addEventListener('hidden.bs.modal', function() {
+            document.getElementById('fileContentBody').textContent = '';
+            document.getElementById('fileContentTitle').textContent = '';
+            
+            // Принудительно удаляем backdrop, если он остался
+            const backdrops = document.querySelectorAll('.modal-backdrop');
+            backdrops.forEach(backdrop => {
+                backdrop.remove();
+            });
+            
+            // Убираем класс modal-open с body
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            document.body.style.paddingRight = '';
+        });
+        
+        // Удаляем backdrop при любом изменении
+        const observer = new MutationObserver(function(mutations) {
+            const backdrops = document.querySelectorAll('.modal-backdrop');
+            backdrops.forEach(backdrop => {
+                backdrop.remove();
+            });
+        });
+        
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+    }
+});
+
 function filterIssues(severity) {
     const rows = document.querySelectorAll('#issuesTable tbody tr');
     rows.forEach(row => {
@@ -185,6 +285,43 @@ function filterIssues(severity) {
             row.style.display = 'none';
         }
     });
+}
+
+function showFileContent(fileId, filePath) {
+    if (!fileContentModal) {
+        console.error('Модальное окно не инициализировано');
+        return;
+    }
+    
+    document.getElementById('fileContentTitle').textContent = filePath;
+    document.getElementById('fileContentBody').textContent = 'Загрузка...';
+    
+    // Показываем модальное окно
+    fileContentModal.show();
+    
+    // Удаляем backdrop сразу после показа
+    setTimeout(function() {
+        const backdrops = document.querySelectorAll('.modal-backdrop');
+        backdrops.forEach(backdrop => {
+            backdrop.remove();
+        });
+    }, 10);
+    
+    // Загружаем содержимое файла
+    const analysisId = '{{.Analysis.ID}}';
+    fetch(`/analyses/${analysisId}/files/${fileId}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Ошибка загрузки файла');
+            }
+            return response.text();
+        })
+        .then(content => {
+            document.getElementById('fileContentBody').textContent = content;
+        })
+        .catch(error => {
+            document.getElementById('fileContentBody').textContent = 'Ошибка: ' + error.message;
+        });
 }
 </script>
 {{end}}

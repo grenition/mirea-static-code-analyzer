@@ -143,3 +143,19 @@ func (r *AnalysisRepository) ListAll() ([]*models.AnalysisRun, error) {
 	return analyses, rows.Err()
 }
 
+func (r *AnalysisRepository) Update(id uuid.UUID, inputMeta json.RawMessage, summary json.RawMessage) error {
+	_, err := r.db.Exec(
+		`UPDATE analysis_runs SET input_meta = $1, summary_json = $2 WHERE id = $3`,
+		inputMeta, summary, id,
+	)
+	return err
+}
+
+func (r *AnalysisRepository) Delete(id uuid.UUID) error {
+	_, err := r.db.Exec(
+		"DELETE FROM analysis_runs WHERE id = $1",
+		id,
+	)
+	return err
+}
+

@@ -20,6 +20,7 @@ type UploadController struct {
 	projectRepo     *repositories.ProjectRepository
 	analysisRepo    *repositories.AnalysisRepository
 	issueRepo       *repositories.IssueRepository
+	fileRepo        *repositories.FileRepository
 }
 
 func NewUploadController(
@@ -29,6 +30,7 @@ func NewUploadController(
 	projectRepo *repositories.ProjectRepository,
 	analysisRepo *repositories.AnalysisRepository,
 	issueRepo *repositories.IssueRepository,
+	fileRepo *repositories.FileRepository,
 ) *UploadController {
 	return &UploadController{
 		tmpl:            tmpl,
@@ -37,6 +39,7 @@ func NewUploadController(
 		projectRepo:     projectRepo,
 		analysisRepo:    analysisRepo,
 		issueRepo:       issueRepo,
+		fileRepo:        fileRepo,
 	}
 }
 
@@ -110,15 +113,8 @@ func (c *UploadController) HandleZipUpload(w http.ResponseWriter, r *http.Reques
 	// Update status to Running
 	c.analysisRepo.UpdateStatus(analysis.ID, "Running")
 
-	// Extract and analyze
-	zipPath, err := c.storageService.SaveZipFile(tmpFile.Name(), analysis.ID.String())
-	if err != nil {
-		c.analysisRepo.UpdateStatus(analysis.ID, "Failed")
-		http.Error(w, "Failed to save zip: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	files, err := c.storageService.ExtractZip(zipPath, "")
+	// Extract files from zip
+	files, err := c.storageService.ExtractZip(tmpFile.Name(), "")
 	if err != nil {
 		c.analysisRepo.UpdateStatus(analysis.ID, "Failed")
 		http.Error(w, "Failed to extract zip: "+err.Error(), http.StatusInternalServerError)
@@ -128,6 +124,20 @@ func (c *UploadController) HandleZipUpload(w http.ResponseWriter, r *http.Reques
 	if len(files) == 0 {
 		c.analysisRepo.UpdateStatus(analysis.ID, "Failed")
 		http.Error(w, "No valid files found in zip", http.StatusBadRequest)
+		return
+	}
+
+	// Save files to database
+	fileModels := make([]models.AnalysisFile, len(files))
+	for i, file := range files {
+		fileModels[i] = models.AnalysisFile{
+			FilePath: file.Path,
+			Content:  file.Content,
+		}
+	}
+	if err := c.fileRepo.CreateBatch(analysis.ID, fileModels); err != nil {
+		c.analysisRepo.UpdateStatus(analysis.ID, "Failed")
+		http.Error(w, "Failed to save files: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -209,6 +219,19 @@ func (c *UploadController) HandleSnippetUpload(w http.ResponseWriter, r *http.Re
 			Path:    filePath,
 			Content: []byte(code),
 		},
+	}
+
+	// Save file to database
+	fileModels := []models.AnalysisFile{
+		{
+			FilePath: filePath,
+			Content:  []byte(code),
+		},
+	}
+	if err := c.fileRepo.CreateBatch(analysis.ID, fileModels); err != nil {
+		c.analysisRepo.UpdateStatus(analysis.ID, "Failed")
+		http.Error(w, "Failed to save file: "+err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	// Run analysis
@@ -293,6 +316,20 @@ func (c *UploadController) HandleSnippetAnalyzeAPI(w http.ResponseWriter, r *htt
 			Path:    filePath,
 			Content: []byte(code),
 		},
+	}
+
+	// Save file to database
+	fileModels := []models.AnalysisFile{
+		{
+			FilePath: filePath,
+			Content:  []byte(code),
+		},
+	}
+	if err := c.fileRepo.CreateBatch(analysis.ID, fileModels); err != nil {
+		c.analysisRepo.UpdateStatus(analysis.ID, "Failed")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to save file: " + err.Error()})
+		return
 	}
 
 	// Run analysis
