@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"github.com/gorilla/mux"
 	"github.com/google/uuid"
+	"webapp/internal/app/middleware"
 	"webapp/internal/app/models"
 	"webapp/internal/app/repositories"
 )
@@ -16,6 +17,7 @@ type AnalysesController struct {
 	projectRepo  *repositories.ProjectRepository
 	issueRepo    *repositories.IssueRepository
 	fileRepo     *repositories.FileRepository
+	userRepo     *repositories.UserRepository
 }
 
 func NewAnalysesController(
@@ -24,6 +26,7 @@ func NewAnalysesController(
 	projectRepo *repositories.ProjectRepository,
 	issueRepo *repositories.IssueRepository,
 	fileRepo *repositories.FileRepository,
+	userRepo *repositories.UserRepository,
 ) *AnalysesController {
 	return &AnalysesController{
 		tmpl:         tmpl,
@@ -31,6 +34,7 @@ func NewAnalysesController(
 		projectRepo:  projectRepo,
 		issueRepo:    issueRepo,
 		fileRepo:     fileRepo,
+		userRepo:     userRepo,
 	}
 }
 
@@ -52,7 +56,20 @@ type DetailsData struct {
 }
 
 func (c *AnalysesController) List(w http.ResponseWriter, r *http.Request) {
-	analyses, err := c.analysisRepo.ListAll()
+	// Get user ID from session
+	userIDStr, ok := middleware.GetUserID(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
+
+	// Get analyses for this user only
+	analyses, err := c.analysisRepo.ListByUserID(userID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -64,18 +81,30 @@ func (c *AnalysesController) List(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			continue
 		}
-	data.Analyses = append(data.Analyses, AnalysisWithProject{
-		Analysis: analysis,
-		Project:  project,
-	})
-}
+		data.Analyses = append(data.Analyses, AnalysisWithProject{
+			Analysis: analysis,
+			Project:  project,
+		})
+	}
 
-	if err := executeTemplate(w, c.tmpl, "analyses", data); err != nil {
+	if err := executeTemplate(w, r, c.tmpl, "analyses", data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 
 func (c *AnalysesController) Details(w http.ResponseWriter, r *http.Request) {
+	// Get user ID from session
+	userIDStr, ok := middleware.GetUserID(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
+
 	vars := mux.Vars(r)
 	id, err := uuid.Parse(vars["id"])
 	if err != nil {
@@ -86,6 +115,12 @@ func (c *AnalysesController) Details(w http.ResponseWriter, r *http.Request) {
 	analysis, err := c.analysisRepo.GetByID(id)
 	if err != nil {
 		http.Error(w, "Analysis not found", http.StatusNotFound)
+		return
+	}
+
+	// Check if analysis belongs to user
+	if analysis.UserID != userID {
+		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 
@@ -120,16 +155,39 @@ func (c *AnalysesController) Details(w http.ResponseWriter, r *http.Request) {
 		Files:    files,
 	}
 
-	if err := executeTemplate(w, c.tmpl, "analysis_details", data); err != nil {
+	if err := executeTemplate(w, r, c.tmpl, "analysis_details", data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 
 func (c *AnalysesController) Delete(w http.ResponseWriter, r *http.Request) {
+	// Get user ID from session
+	userIDStr, ok := middleware.GetUserID(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
+
 	vars := mux.Vars(r)
 	id, err := uuid.Parse(vars["id"])
 	if err != nil {
 		http.Error(w, "Invalid analysis ID", http.StatusBadRequest)
+		return
+	}
+
+	// Check if analysis belongs to user
+	analysis, err := c.analysisRepo.GetByID(id)
+	if err != nil {
+		http.Error(w, "Analysis not found", http.StatusNotFound)
+		return
+	}
+	if analysis.UserID != userID {
+		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 

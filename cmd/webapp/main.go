@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 
 	"webapp/internal/app/controllers"
+	"webapp/internal/app/middleware"
 	"webapp/internal/app/repositories"
 	"webapp/internal/app/services"
 	"webapp/internal/db"
@@ -46,7 +47,15 @@ func main() {
 		log.Fatalf("Failed to create temp storage directory: %v", err)
 	}
 
+	// Initialize auth
+	secretKey := os.Getenv("SESSION_SECRET")
+	if secretKey == "" {
+		secretKey = "change-this-secret-key-in-production" // Default for development
+	}
+	middleware.InitAuth(secretKey)
+
 	// Initialize repositories
+	userRepo := repositories.NewUserRepository(database)
 	projectRepo := repositories.NewProjectRepository(database)
 	analysisRepo := repositories.NewAnalysisRepository(database)
 	issueRepo := repositories.NewIssueRepository(database)
@@ -58,9 +67,10 @@ func main() {
 
 	// Initialize controllers
 	tmpl := parseTemplates()
+	authCtrl := controllers.NewAuthController(userRepo, tmpl)
 	homeCtrl := controllers.NewHomeController(tmpl)
-	uploadCtrl := controllers.NewUploadController(tmpl, analyzerService, storageService, projectRepo, analysisRepo, issueRepo, fileRepo)
-	analysesCtrl := controllers.NewAnalysesController(tmpl, analysisRepo, projectRepo, issueRepo, fileRepo)
+	uploadCtrl := controllers.NewUploadController(tmpl, analyzerService, storageService, projectRepo, analysisRepo, issueRepo, fileRepo, userRepo)
+	analysesCtrl := controllers.NewAnalysesController(tmpl, analysisRepo, projectRepo, issueRepo, fileRepo, userRepo)
 	aboutCtrl := controllers.NewAboutController(tmpl)
 
 	// Setup router
@@ -74,18 +84,25 @@ func main() {
 		r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
 	}
 
-	// Routes
+	// Public routes
+	r.HandleFunc("/login", authCtrl.ShowLogin).Methods("GET")
+	r.HandleFunc("/login", authCtrl.HandleLogin).Methods("POST")
+	r.HandleFunc("/register", authCtrl.ShowRegister).Methods("GET")
+	r.HandleFunc("/register", authCtrl.HandleRegister).Methods("POST")
+	r.HandleFunc("/logout", authCtrl.HandleLogout).Methods("GET")
 	r.HandleFunc("/", homeCtrl.Index).Methods("GET")
-	r.HandleFunc("/upload", uploadCtrl.ShowUpload).Methods("GET")
-	r.HandleFunc("/upload/zip", uploadCtrl.HandleZipUpload).Methods("POST")
-	r.HandleFunc("/upload/snippet", uploadCtrl.HandleSnippetUpload).Methods("POST")
-	r.HandleFunc("/snippet-analyzer", uploadCtrl.ShowSnippetAnalyzer).Methods("GET")
-	r.HandleFunc("/api/analyze/snippet", uploadCtrl.HandleSnippetAnalyzeAPI).Methods("POST")
-	r.HandleFunc("/analyses", analysesCtrl.List).Methods("GET")
-	r.HandleFunc("/analyses/{id}", analysesCtrl.Details).Methods("GET")
-	r.HandleFunc("/analyses/{id}/delete", analysesCtrl.Delete).Methods("POST")
-	r.HandleFunc("/analyses/{id}/files/{fileId}", analysesCtrl.GetFileContent).Methods("GET")
 	r.HandleFunc("/about", aboutCtrl.Index).Methods("GET")
+
+	// Protected routes
+	r.HandleFunc("/upload", middleware.RequireAuth(uploadCtrl.ShowUpload)).Methods("GET")
+	r.HandleFunc("/upload/zip", middleware.RequireAuth(uploadCtrl.HandleZipUpload)).Methods("POST")
+	r.HandleFunc("/upload/snippet", middleware.RequireAuth(uploadCtrl.HandleSnippetUpload)).Methods("POST")
+	r.HandleFunc("/snippet-analyzer", middleware.RequireAuth(uploadCtrl.ShowSnippetAnalyzer)).Methods("GET")
+	r.HandleFunc("/api/analyze/snippet", middleware.RequireAuth(uploadCtrl.HandleSnippetAnalyzeAPI)).Methods("POST")
+	r.HandleFunc("/analyses", middleware.RequireAuth(analysesCtrl.List)).Methods("GET")
+	r.HandleFunc("/analyses/{id}", middleware.RequireAuth(analysesCtrl.Details)).Methods("GET")
+	r.HandleFunc("/analyses/{id}/delete", middleware.RequireAuth(analysesCtrl.Delete)).Methods("POST")
+	r.HandleFunc("/analyses/{id}/files/{fileId}", middleware.RequireAuth(analysesCtrl.GetFileContent)).Methods("GET")
 
 	// Start server
 	port := os.Getenv("PORT")

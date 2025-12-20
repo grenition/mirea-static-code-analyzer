@@ -14,7 +14,7 @@ func NewAboutController(tmpl *template.Template) *AboutController {
 }
 
 func (c *AboutController) Index(w http.ResponseWriter, r *http.Request) {
-	if err := executeTemplate(w, c.tmpl, "about", nil); err != nil {
+	if err := executeTemplate(w, r, c.tmpl, "about", nil); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }

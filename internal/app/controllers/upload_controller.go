@@ -8,9 +8,11 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"webapp/internal/app/middleware"
 	"webapp/internal/app/models"
 	"webapp/internal/app/repositories"
 	"webapp/internal/app/services"
+	"github.com/google/uuid"
 )
 
 type UploadController struct {
@@ -21,6 +23,7 @@ type UploadController struct {
 	analysisRepo    *repositories.AnalysisRepository
 	issueRepo       *repositories.IssueRepository
 	fileRepo        *repositories.FileRepository
+	userRepo        *repositories.UserRepository
 }
 
 func NewUploadController(
@@ -31,6 +34,7 @@ func NewUploadController(
 	analysisRepo *repositories.AnalysisRepository,
 	issueRepo *repositories.IssueRepository,
 	fileRepo *repositories.FileRepository,
+	userRepo *repositories.UserRepository,
 ) *UploadController {
 	return &UploadController{
 		tmpl:            tmpl,
@@ -40,17 +44,18 @@ func NewUploadController(
 		analysisRepo:    analysisRepo,
 		issueRepo:       issueRepo,
 		fileRepo:        fileRepo,
+		userRepo:        userRepo,
 	}
 }
 
 func (c *UploadController) ShowUpload(w http.ResponseWriter, r *http.Request) {
-	if err := executeTemplate(w, c.tmpl, "upload", nil); err != nil {
+	if err := executeTemplate(w, r, c.tmpl, "upload", nil); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 
 func (c *UploadController) ShowSnippetAnalyzer(w http.ResponseWriter, r *http.Request) {
-	if err := executeTemplate(w, c.tmpl, "snippet_analyzer", nil); err != nil {
+	if err := executeTemplate(w, r, c.tmpl, "snippet_analyzer", nil); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -77,8 +82,20 @@ func (c *UploadController) HandleZipUpload(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Get user ID from session
+	userIDStr, ok := middleware.GetUserID(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
+
 	// Create project
-	project, err := c.projectRepo.Create(projectName)
+	project, err := c.projectRepo.Create(projectName, userID)
 	if err != nil {
 		http.Error(w, "Failed to create project: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -104,7 +121,7 @@ func (c *UploadController) HandleZipUpload(w http.ResponseWriter, r *http.Reques
 		"size_bytes": header.Size,
 	})
 
-	analysis, err := c.analysisRepo.Create(project.ID, "zip", inputMeta)
+	analysis, err := c.analysisRepo.Create(project.ID, userID, "zip", inputMeta)
 	if err != nil {
 		http.Error(w, "Failed to create analysis: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -190,8 +207,20 @@ func (c *UploadController) HandleSnippetUpload(w http.ResponseWriter, r *http.Re
 		ext = "." + ext
 	}
 
+	// Get user ID from session
+	userIDStr, ok := middleware.GetUserID(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
+
 	// Create project
-	project, err := c.projectRepo.Create(projectName)
+	project, err := c.projectRepo.Create(projectName, userID)
 	if err != nil {
 		http.Error(w, "Failed to create project: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -203,7 +232,7 @@ func (c *UploadController) HandleSnippetUpload(w http.ResponseWriter, r *http.Re
 		"size_bytes": len(code),
 	})
 
-	analysis, err := c.analysisRepo.Create(project.ID, "snippet", inputMeta)
+	analysis, err := c.analysisRepo.Create(project.ID, userID, "snippet", inputMeta)
 	if err != nil {
 		http.Error(w, "Failed to create analysis: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -285,8 +314,22 @@ func (c *UploadController) HandleSnippetAnalyzeAPI(w http.ResponseWriter, r *htt
 		ext = "." + ext
 	}
 
+	// Get user ID from session
+	userIDStr, ok := middleware.GetUserID(r)
+	if !ok {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Unauthorized"})
+		return
+	}
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid user ID"})
+		return
+	}
+
 	// Create project (optional for API - we can skip saving if needed, but let's save it)
-	project, err := c.projectRepo.Create(projectName)
+	project, err := c.projectRepo.Create(projectName, userID)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to create project: " + err.Error()})
@@ -299,7 +342,7 @@ func (c *UploadController) HandleSnippetAnalyzeAPI(w http.ResponseWriter, r *htt
 		"size_bytes": len(code),
 	})
 
-	analysis, err := c.analysisRepo.Create(project.ID, "snippet", inputMeta)
+	analysis, err := c.analysisRepo.Create(project.ID, userID, "snippet", inputMeta)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to create analysis: " + err.Error()})

@@ -16,7 +16,7 @@ func NewHomeController(tmpl *template.Template) *HomeController {
 func (c *HomeController) Index(w http.ResponseWriter, r *http.Request) {
 	// Create a temporary template that includes home blocks
 	// We'll execute layout which will use the blocks from home.html
-	if err := executeTemplate(w, c.tmpl, "home", nil); err != nil {
+	if err := executeTemplate(w, r, c.tmpl, "home", nil); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }

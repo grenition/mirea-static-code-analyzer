@@ -16,14 +16,14 @@ func NewAnalysisRepository(db *sql.DB) *AnalysisRepository {
 	return &AnalysisRepository{db: db}
 }
 
-func (r *AnalysisRepository) Create(projectID uuid.UUID, inputType string, inputMeta json.RawMessage) (*models.AnalysisRun, error) {
+func (r *AnalysisRepository) Create(projectID, userID uuid.UUID, inputType string, inputMeta json.RawMessage) (*models.AnalysisRun, error) {
 	id := uuid.New()
 	now := time.Now()
 
 	_, err := r.db.Exec(
-		`INSERT INTO analysis_runs (id, project_id, status, created_at, input_type, input_meta)
-		 VALUES ($1, $2, $3, $4, $5, $6)`,
-		id, projectID, "Created", now, inputType, inputMeta,
+		`INSERT INTO analysis_runs (id, project_id, user_id, status, created_at, input_type, input_meta)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		id, projectID, userID, "Created", now, inputType, inputMeta,
 	)
 	if err != nil {
 		return nil, err
@@ -32,6 +32,7 @@ func (r *AnalysisRepository) Create(projectID uuid.UUID, inputType string, input
 	return &models.AnalysisRun{
 		ID:        id,
 		ProjectID: projectID,
+		UserID:    userID,
 		Status:    "Created",
 		CreatedAt: now,
 		InputType: inputType,
@@ -73,12 +74,12 @@ func (r *AnalysisRepository) GetByID(id uuid.UUID) (*models.AnalysisRun, error) 
 	var inputMeta, summaryJSON sql.NullString
 
 	err := r.db.QueryRow(
-		`SELECT id, project_id, status, created_at, started_at, finished_at, 
+		`SELECT id, project_id, user_id, status, created_at, started_at, finished_at, 
 		 input_type, input_meta, summary_json
 		 FROM analysis_runs WHERE id = $1`,
 		id,
 	).Scan(
-		&a.ID, &a.ProjectID, &a.Status, &a.CreatedAt,
+		&a.ID, &a.ProjectID, &a.UserID, &a.Status, &a.CreatedAt,
 		&startedAt, &finishedAt, &a.InputType, &inputMeta, &summaryJSON,
 	)
 	if err != nil {
@@ -103,7 +104,7 @@ func (r *AnalysisRepository) GetByID(id uuid.UUID) (*models.AnalysisRun, error) 
 
 func (r *AnalysisRepository) ListAll() ([]*models.AnalysisRun, error) {
 	rows, err := r.db.Query(
-		`SELECT id, project_id, status, created_at, started_at, finished_at,
+		`SELECT id, project_id, user_id, status, created_at, started_at, finished_at,
 		 input_type, input_meta, summary_json
 		 FROM analysis_runs ORDER BY created_at DESC`,
 	)
@@ -119,7 +120,50 @@ func (r *AnalysisRepository) ListAll() ([]*models.AnalysisRun, error) {
 		var inputMeta, summaryJSON sql.NullString
 
 		if err := rows.Scan(
-			&a.ID, &a.ProjectID, &a.Status, &a.CreatedAt,
+			&a.ID, &a.ProjectID, &a.UserID, &a.Status, &a.CreatedAt,
+			&startedAt, &finishedAt, &a.InputType, &inputMeta, &summaryJSON,
+		); err != nil {
+			return nil, err
+		}
+
+		if startedAt.Valid {
+			a.StartedAt = &startedAt.Time
+		}
+		if finishedAt.Valid {
+			a.FinishedAt = &finishedAt.Time
+		}
+		if inputMeta.Valid {
+			a.InputMeta = json.RawMessage(inputMeta.String)
+		}
+		if summaryJSON.Valid {
+			a.SummaryJSON = json.RawMessage(summaryJSON.String)
+		}
+
+		analyses = append(analyses, &a)
+	}
+	return analyses, rows.Err()
+}
+
+func (r *AnalysisRepository) ListByUserID(userID uuid.UUID) ([]*models.AnalysisRun, error) {
+	rows, err := r.db.Query(
+		`SELECT id, project_id, user_id, status, created_at, started_at, finished_at,
+		 input_type, input_meta, summary_json
+		 FROM analysis_runs WHERE user_id = $1 ORDER BY created_at DESC`,
+		userID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var analyses []*models.AnalysisRun
+	for rows.Next() {
+		var a models.AnalysisRun
+		var startedAt, finishedAt sql.NullTime
+		var inputMeta, summaryJSON sql.NullString
+
+		if err := rows.Scan(
+			&a.ID, &a.ProjectID, &a.UserID, &a.Status, &a.CreatedAt,
 			&startedAt, &finishedAt, &a.InputType, &inputMeta, &summaryJSON,
 		); err != nil {
 			return nil, err

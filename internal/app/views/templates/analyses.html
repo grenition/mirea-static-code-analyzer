@@ -7,7 +7,11 @@
             <i class="bi bi-clock-history text-primary me-2"></i>История анализов
         </h1>
 
-        {{if .Analyses}}
+        {{$data := .Data}}
+        {{if not $data}}
+            {{$data = .}}
+        {{end}}
+        {{if $data.Analyses}}
         <div class="card">
             <div class="card-body">
                 <div class="table-responsive">
@@ -22,7 +26,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {{range .Analyses}}
+                            {{range $data.Analyses}}
                             <tr>
                                 <td><strong>{{.Project.Name}}</strong></td>
                                 <td>

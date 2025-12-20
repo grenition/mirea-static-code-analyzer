@@ -9,6 +9,7 @@ import (
 type AnalysisRun struct {
 	ID          uuid.UUID
 	ProjectID   uuid.UUID
+	UserID      uuid.UUID
 	Status      string
 	CreatedAt   time.Time
 	StartedAt   *time.Time
