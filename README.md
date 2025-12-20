@@ -10,12 +10,18 @@
 
 ### 1. Анализ проекта из ZIP-архива
 Загрузите ZIP-архив с вашим проектом и получите полный отчет о проблемах во всех файлах.
+![Upload ZIP archive](docs/images/upload_zip.png)
+![Analyze details part 1](docs/images/analyze_details_part1.png)
+![Analyze details part 2](docs/images/analyze_details_part2.png)
+
 
 ### 2. Быстрая проверка фрагмента кода
 Вставьте код в Live анализатор и получите мгновенные результаты с возможностью выбора языка программирования.
+![Live analyzer](docs/images/live_analyzer.png)
 
 ### 3. История анализов
 Просматривайте все предыдущие анализы, управляйте ими и просматривайте содержимое проанализированных файлов.
+![Analyzer history](docs/images/analyzer_history.png)
 
 ## Быстрый старт
 
